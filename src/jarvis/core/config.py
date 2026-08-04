@@ -96,6 +96,15 @@ class SandboxConfig(BaseModel):
     blocked_commands: list[str] = Field(default_factory=list)  # Extra blocked command patterns
 
 
+class ToolRAGConfig(BaseModel):
+    """Tool RAG (semantic tool selection) settings."""
+    enabled: bool = True
+    top_k: int = 8
+    always_include: list[str] = Field(
+        default_factory=lambda: ["run_command", "calculator", "get_mcps", "get_tools"]
+    )
+
+
 class ToolsConfig(BaseModel):
     """Tool system settings."""
     enabled: bool = True
@@ -104,9 +113,11 @@ class ToolsConfig(BaseModel):
     timeout: int = 30
     max_retries: int = 2
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+    rag: ToolRAGConfig = Field(default_factory=ToolRAGConfig)
     categories: dict[str, bool] = Field(
         default_factory=lambda: {"basic": True, "filesystem": True, "system": True, "code": True}
     )
+
 
 
 class MCPConfig(BaseModel):

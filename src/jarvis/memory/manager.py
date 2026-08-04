@@ -59,6 +59,11 @@ class MemoryManager:
         """
         self._provider_source = source
 
+    @property
+    def embedder(self) -> Any | None:
+        """Get the embedder instance from vector store if available."""
+        return self.vector._embedder if self.vector else None
+
     def set_provider_manager(self, manager: Any) -> None:
         """Provide the provider manager (for named provider lookups).
 

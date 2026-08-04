@@ -14,6 +14,7 @@ wheels/
 
 # Data (runtime-generated)
 data/conversations/*.json
+data/cache/*.json
 data/knowledge_base/*
 !data/knowledge_base/.gitkeep
 data/vector_store/*

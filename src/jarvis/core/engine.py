@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from jarvis.memory.manager import MemoryManager
     from jarvis.providers.manager import ProviderManager
     from jarvis.tools.executor import ToolExecutor
+    from jarvis.tools.rag import ToolRetriever
     from jarvis.tools.registry import ToolRegistry
     from jarvis.voice.manager import VoiceManager
 
@@ -63,6 +64,7 @@ class JarvisEngine:
         self.tool_executor: ToolExecutor | None = None
         self.mcp_manager: MCPManager | None = None
         self.voice_manager: VoiceManager | None = None
+        self.tool_retriever: ToolRetriever | None = None
         self.prompt_builder: SystemPromptBuilder = SystemPromptBuilder()
         self.session: Session | None = None
         self._initialized: bool = False
@@ -92,6 +94,7 @@ class JarvisEngine:
         await self._init_tools(config)
         await self._init_mcp(config)
         await self._init_voice(config)
+        await self._init_tool_rag(config)
 
         # 3. Create session
         from jarvis.core.session import Session
@@ -133,7 +136,7 @@ class JarvisEngine:
         )
 
         # 3. Gather tool definitions
-        tool_defs = self._get_tool_definitions()
+        tool_defs = await self._get_tool_definitions(query=message)
 
         # 4. Save user message to memory
         if self.memory_manager:
@@ -276,7 +279,7 @@ class JarvisEngine:
         if self.memory_manager:
             await self.memory_manager.add_message(session_id, "user", message)
 
-        tool_defs = self._get_tool_definitions()
+        tool_defs = await self._get_tool_definitions(query=message)
         on_tool_call = kwargs.get("on_tool_call")
         on_tool_result = kwargs.get("on_tool_result")
         approval_callback = kwargs.get("approval_callback")
@@ -444,11 +447,36 @@ class JarvisEngine:
             self.voice_manager = None
             logger.warning(f"Voice manager failed to initialize ({e}); using text mode.")
 
-    def _get_tool_definitions(self) -> list[ToolDefinition]:
+    async def _init_tool_rag(self, config: JarvisConfig) -> None:
+        """Initialize and index Tool RAG if enabled."""
+        if not config.tools.enabled or not config.tools.rag.enabled:
+            return
+        try:
+            from jarvis.tools.rag import ToolRetriever
+            embedder = self.memory_manager.embedder if (self.memory_manager and self.memory_manager.vector) else None
+            if embedder is None:
+                from jarvis.memory.vector.embedder import Embedder
+                embedder = Embedder(
+                    model=config.memory.vector.embedding_model,
+                    preferred_provider=config.memory.vector.embedding_provider,
+                    provider_manager=self.provider_manager,
+                )
+            self.tool_retriever = ToolRetriever(embedder=embedder)
+            await self.tool_retriever.initialize()
+
+            all_tools = await self._get_tool_definitions(query=None)
+            if all_tools:
+                await self.tool_retriever.index_tools(all_tools)
+        except Exception as e:
+            logger.warning(f"Failed to initialize Tool RAG: {e}")
+
+    async def _get_tool_definitions(self, query: str | None = None) -> list[ToolDefinition]:
         """Convert registered tools into provider ToolDefinition list.
 
         Combines built-in tools from the tool registry with MCP tools
         (using their qualified ``server__tool`` names) when MCP is enabled.
+        If a query is provided and Tool RAG is enabled, dynamically selects
+        the top relevant tools.
         """
         tool_defs: list[ToolDefinition] = []
 
@@ -464,6 +492,20 @@ class JarvisEngine:
 
         if self.mcp_manager and self.config and self.config.mcp.enabled:
             tool_defs.extend(self.mcp_manager.get_all_tool_definitions())
+
+        if (
+            query
+            and self.config
+            and self.config.tools.rag.enabled
+            and self.tool_retriever
+        ):
+            rag_cfg = self.config.tools.rag
+            return await self.tool_retriever.retrieve(
+                query=query,
+                all_tools=tool_defs,
+                top_k=rag_cfg.top_k,
+                always_include=rag_cfg.always_include,
+            )
 
         return tool_defs
 

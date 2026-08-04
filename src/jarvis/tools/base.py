@@ -118,5 +118,10 @@ class BaseTool(ABC):
         """Tool description."""
         return self.schema.description
 
+    @property
+    def category(self) -> str:
+        """Tool category."""
+        return self.schema.category
+
     def __repr__(self) -> str:
         return f"<Tool: {self.name}>"

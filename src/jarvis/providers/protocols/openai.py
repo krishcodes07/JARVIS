@@ -93,10 +93,14 @@ class OpenAIProvider(BaseProvider):
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
         """Generate embeddings using the OpenAI Embeddings API."""
-        payload = {
+        payload: dict[str, Any] = {
             "input": texts,
             "model": model,
         }
+        # NVIDIA NIM embedding models require input_type ("passage" or "query")
+        if "nvidia" in model.lower() or "nvidia" in str(self._client.base_url).lower():
+            payload["input_type"] = "passage"
+
         response = await self._client.post("/embeddings", json=payload)
         response.raise_for_status()
         data = response.json()

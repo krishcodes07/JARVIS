@@ -7,7 +7,7 @@ provider:
   active: opencode-zen
   model: mimo-v2.5-free
   temperature: 0.7
-  max_tokens: 32000
+  max_tokens: 16000
   top_p: 1.0
   fallback:
     enabled: true
@@ -17,9 +17,9 @@ memory:
   conversation:
     enabled: true
     backend: json
-    max_messages: 100
+    max_messages: 30
     auto_summarize: true
-    summarize_after: 50
+    summarize_after: 20
   long_term:
     enabled: true
     auto_extract: true
@@ -47,6 +47,12 @@ tools:
     workspace: .
     extra_paths: []
     blocked_commands: []
+  rag:
+    enabled: true
+    top_k: 5
+    always_include:
+    - get_mcps
+    - get_tools
   categories:
     basic: true
     filesystem: true
