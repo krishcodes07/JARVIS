@@ -1,0 +1,41 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment variables
+.env
+
+# Data (runtime-generated)
+data/conversations/*.json
+data/knowledge_base/*
+!data/knowledge_base/.gitkeep
+data/vector_store/*
+!data/vector_store/.gitkeep
+data/long_term_memory/*
+!data/long_term_memory/.gitkeep
+data/logs/*
+!data/logs/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/

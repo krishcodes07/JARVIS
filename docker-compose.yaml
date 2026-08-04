@@ -1,0 +1,16 @@
+# ══════════════════════════════════════════════════════════════
+#  JARVIS — Docker Compose
+# ══════════════════════════════════════════════════════════════
+services:
+  jarvis:
+    build: .
+    container_name: jarvis
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+      - ./src/jarvis/skills:/app/src/jarvis/skills
+    restart: unless-stopped

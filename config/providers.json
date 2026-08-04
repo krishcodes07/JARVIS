@@ -1,0 +1,84 @@
+{
+  "providers": [
+    {
+      "name": "openai",
+      "display_name": "OpenAI",
+      "protocol": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "default_model": "gpt-4o",
+      "supports": ["text", "streaming", "tools", "vision", "embeddings"]
+    },
+    {
+      "name": "anthropic",
+      "display_name": "Anthropic",
+      "protocol": "anthropic",
+      "base_url": "https://api.anthropic.com",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "default_model": "claude-sonnet-4-20250514",
+      "supports": ["text", "streaming", "tools", "vision"]
+    },
+    {
+      "name": "google",
+      "display_name": "Google Gemini",
+      "protocol": "google",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "api_key_env": "GOOGLE_API_KEY",
+      "default_model": "gemini-2.5-flash",
+      "supports": ["text", "streaming", "tools", "vision", "embeddings"]
+    },
+    {
+      "name": "groq",
+      "display_name": "Groq",
+      "protocol": "openai",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key_env": "GROQ_API_KEY",
+      "default_model": "llama-3.3-70b-versatile",
+      "supports": ["text", "streaming", "tools"]
+    },
+    {
+      "name": "nvidia",
+      "display_name": "NVIDIA NIM",
+      "protocol": "openai",
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "api_key_env": "NVIDIA_API_KEY",
+      "default_model": "meta/llama-3.1-405b-instruct",
+      "supports": ["text", "streaming", "tools"]
+    },
+    {
+      "name": "openrouter",
+      "display_name": "OpenRouter",
+      "protocol": "openai",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "default_model": "anthropic/claude-sonnet-4",
+      "supports": ["text", "streaming", "tools", "vision"],
+      "extra_headers": {
+        "HTTP-Referer": "https://github.com/jarvis-ai",
+        "X-Title": "JARVIS"
+      }
+    },
+    {
+      "name": "mistral",
+      "display_name": "Mistral AI",
+      "protocol": "openai",
+      "base_url": "https://api.mistral.ai/v1",
+      "api_key_env": "MISTRAL_API_KEY",
+      "default_model": "mistral-large-latest",
+      "supports": ["text", "streaming", "tools", "vision"]
+    },
+    {
+      "name": "opencode-zen",
+      "display_name": "OpenCode Zen",
+      "protocol": "openai",
+      "base_url": "https://opencode.ai/zen/v1",
+      "api_key_env": "OPENCODE_ZEN_API_KEY",
+      "default_model": "deepseek-v4-flash-free",
+      "supports": [
+        "text",
+        "streaming",
+        "tools"
+      ]
+    }
+  ]
+}

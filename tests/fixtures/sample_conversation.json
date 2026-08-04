@@ -1,0 +1,10 @@
+[
+    {
+        "session_id": "sample_001",
+        "messages": [
+            {"role": "system", "content": "You are JARVIS.", "timestamp": "2026-01-01T00:00:00Z"},
+            {"role": "user", "content": "Hello JARVIS!", "timestamp": "2026-01-01T00:00:01Z"},
+            {"role": "assistant", "content": "Good day, sir. How may I assist you?", "timestamp": "2026-01-01T00:00:02Z"}
+        ]
+    }
+]

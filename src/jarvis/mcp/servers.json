@@ -1,0 +1,88 @@
+{
+  "servers": {
+    "gmail": {
+      "command": "python",
+      "args": [
+        "-m",
+        "jarvis.mcp.servers.gmail.server"
+      ],
+      "transport": "stdio",
+      "description": "Gmail integration — send, read, and search emails",
+      "enabled": true
+    },
+    "calendar": {
+      "command": "python",
+      "args": [
+        "-m",
+        "jarvis.mcp.servers.calendar.server"
+      ],
+      "transport": "stdio",
+      "description": "Calendar integration — manage events and schedules",
+      "enabled": true
+    },
+    "excel": {
+      "command": "python",
+      "args": [
+        "-m",
+        "jarvis.mcp.servers.excel.server"
+      ],
+      "transport": "stdio",
+      "description": "Excel/spreadsheet integration — read, write, analyze data",
+      "enabled": true
+    },
+    "telegram": {
+      "command": "python",
+      "args": [
+        "-m",
+        "jarvis.mcp.servers.telegram.server"
+      ],
+      "transport": "stdio",
+      "description": "Telegram integration — send and read messages",
+      "enabled": true
+    },
+    "terminal": {
+      "command": "python",
+      "args": [
+        "-m",
+        "jarvis.mcp.servers.terminal.server"
+      ],
+      "transport": "stdio",
+      "description": "Terminal integration — run commands and inspect the system",
+      "enabled": true
+    },
+    "filesystem": {
+      "command": "python",
+      "args": [
+        "-m",
+        "jarvis.mcp.servers.filesystem.server"
+      ],
+      "transport": "stdio",
+      "description": "Filesystem integration — read, write, and manage files",
+      "enabled": true
+    },
+    "firecrawl-mcp": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "firecrawl-mcp"
+      ],
+      "transport": "stdio",
+      "description": "Firecrawl MCP integration — web scraping and search",
+      "enabled": true,
+      "env": {
+        "FIRECRAWL_API_KEY": ""
+      }
+    },
+    "vercel": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.vercel.com"
+      ],
+      "transport": "stdio",
+      "description": "Vercel MCP integration — manage projects, deployments, analytics, and docs",
+      "enabled": false
+    }
+  }
+}

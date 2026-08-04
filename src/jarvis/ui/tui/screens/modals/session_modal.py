@@ -1,0 +1,375 @@
+"""
+Sessions Modal Screen — Floating dialog for managing and switching sessions (/sessions).
+Reads real session JSON files from data/conversations/ and matches Image 2 design.
+
+Supports:
+- Keyboard navigation (up/down from search)
+- Delete session (Ctrl+D)
+- Rename session (Ctrl+R)
+- Pin/Unpin session (Ctrl+F)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+from rich.text import Text
+from textual import on
+from textual.screen import ModalScreen
+from textual.widgets import Input, OptionList
+from textual.widgets.option_list import Option
+
+from jarvis.core.config import DATA_DIR
+from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
+
+if TYPE_CHECKING:
+    from jarvis.core.engine import JarvisEngine
+
+logger = logging.getLogger(__name__)
+
+PINNED_SESSIONS_PATH = DATA_DIR / "cache" / "pinned_sessions.json"
+
+
+def _load_pinned_sessions() -> set[str]:
+    """Load set of pinned session IDs from disk."""
+    if PINNED_SESSIONS_PATH.exists():
+        try:
+            with open(PINNED_SESSIONS_PATH, encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return set(data)
+        except Exception as e:
+            logger.warning(f"Failed to read pinned_sessions.json: {e}")
+    return set()
+
+
+def _save_pinned_sessions(pinned: set[str]) -> None:
+    """Save set of pinned session IDs to disk."""
+    PINNED_SESSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(PINNED_SESSIONS_PATH, "w", encoding="utf-8") as f:
+            json.dump(list(pinned), f, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not save pinned_sessions.json: {e}")
+
+
+class SessionModal(ModalScreen[str | None]):
+    """Modal dialog for session management, searching, and switching."""
+
+    DEFAULT_CSS = """
+    SessionModal {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.8);
+    }
+    """
+
+    def __init__(self, engine: JarvisEngine | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.engine = engine
+        self.dialog = ModalDialog(
+            title="Sessions",
+            dialog_id="session-dialog",
+            width=66,
+            height=21,
+            show_search=True,
+            search_placeholder="Search sessions...",
+            footer_text="pin/unpin ctrl+f   delete ctrl+d   rename ctrl+r",
+        )
+        self.sessions_data: list[dict] = []
+        self.pinned_sessions: set[str] = _load_pinned_sessions()
+
+    @property
+    def search_input(self) -> Input | None:
+        return self.dialog.search_input
+
+    @property
+    def option_list(self) -> OptionList:
+        return self.dialog.option_list
+
+    def compose(self):
+        yield self.dialog
+
+    def on_mount(self) -> None:
+        if self.search_input:
+            self.search_input.focus()
+        self.sessions_data = self.load_real_sessions()
+        # Defer populate to ensure the option list widget is fully mounted
+        self.call_after_refresh(self.populate_list)
+
+    def on_key(self, event) -> None:
+        """Delegate arrow keys and Enter from search input to the option list."""
+        if self.search_input and self.search_input.has_focus:
+            if event.key == "up":
+                event.stop()
+                self.option_list.action_cursor_up()
+            elif event.key == "down":
+                event.stop()
+                self.option_list.action_cursor_down()
+            elif event.key == "enter":
+                event.stop()
+                self.option_list.action_select()
+
+    def _get_highlighted_session_id(self) -> str | None:
+        """Get the session ID of the currently highlighted option."""
+        highlighted = self.option_list.highlighted
+        if highlighted is not None:
+            option = self.option_list.get_option_at_index(highlighted)
+            option_id = str(option.id) if option and option.id else None
+            if option_id and not option_id.startswith("grp-"):
+                return option_id
+        return None
+
+    def key_ctrl_d(self) -> None:
+        """Delete the highlighted session with confirmation dialog."""
+        sid = self._get_highlighted_session_id()
+        if not sid or sid == "new":
+            return
+
+        from jarvis.ui.tui.screens.modals.confirm_modal import ConfirmModal
+
+        def on_confirmed(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+
+            conv_path = DATA_DIR / "conversations" / f"{sid}.json"
+            if conv_path.exists():
+                try:
+                    os.remove(conv_path)
+                    logger.info(f"Deleted session file: {conv_path}")
+                except Exception as e:
+                    logger.warning(f"Could not delete session {sid}: {e}")
+                    return
+
+            # Remove from pinned if it was pinned
+            if sid in self.pinned_sessions:
+                self.pinned_sessions.discard(sid)
+                _save_pinned_sessions(self.pinned_sessions)
+
+            # Refresh
+            self.sessions_data = self.load_real_sessions()
+            self.populate_list(self.search_input.value if self.search_input else "")
+
+        self.app.push_screen(
+            ConfirmModal(
+                message=f"Delete session '{sid}'?",
+                title="Confirm Session Deletion",
+                confirm_label="Yes, delete session",
+            ),
+            on_confirmed,
+        )
+
+    def key_ctrl_r(self) -> None:
+        """Rename the highlighted session by updating its first user message."""
+        sid = self._get_highlighted_session_id()
+        if not sid or sid == "new":
+            return
+
+        # Use the search input value as the new name
+        if not self.search_input:
+            return
+
+        new_name = self.search_input.value.strip()
+        if not new_name:
+            # Show hint in search box
+            self.search_input.placeholder = "Type new name, then press Ctrl+R"
+            return
+
+        conv_path = DATA_DIR / "conversations" / f"{sid}.json"
+        if not conv_path.exists():
+            return
+
+        try:
+            with open(conv_path, encoding="utf-8") as f:
+                data = json.load(f)
+
+            if isinstance(data, list):
+                # Insert/update a metadata entry at the beginning for the display name
+                meta_found = False
+                for msg in data:
+                    if msg.get("role") == "system" and msg.get("_session_title"):
+                        msg["_session_title"] = new_name
+                        meta_found = True
+                        break
+                if not meta_found:
+                    data.insert(0, {
+                        "role": "system",
+                        "content": "",
+                        "_session_title": new_name,
+                    })
+
+                with open(conv_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+
+                logger.info(f"Renamed session {sid} to: {new_name}")
+
+            # Clear search and refresh
+            self.search_input.value = ""
+            self.search_input.placeholder = "Search sessions..."
+            self.sessions_data = self.load_real_sessions()
+            self.populate_list()
+
+        except Exception as e:
+            logger.warning(f"Could not rename session {sid}: {e}")
+
+    def key_ctrl_f(self) -> None:
+        """Toggle pin/unpin for the highlighted session."""
+        sid = self._get_highlighted_session_id()
+        if not sid or sid == "new":
+            return
+
+        if sid in self.pinned_sessions:
+            self.pinned_sessions.discard(sid)
+        else:
+            self.pinned_sessions.add(sid)
+
+        _save_pinned_sessions(self.pinned_sessions)
+
+        # Refresh to show pin status change
+        self.sessions_data = self.load_real_sessions()
+        self.populate_list(self.search_input.value if self.search_input else "")
+
+    def load_real_sessions(self) -> list[dict]:
+        """Scan data/conversations/ for real JSON session files."""
+        sessions: list[dict] = []
+        sessions.append(
+            {"id": "new", "title": "+ Create New Session", "date_group": "Actions", "active": False}
+        )
+
+        conv_dir = DATA_DIR / "conversations"
+        if not conv_dir.exists():
+            return sessions
+
+        files = sorted(conv_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+
+        active_sid = (
+            self.engine.session.session_id
+            if (self.engine and self.engine.session)
+            else None
+        )
+
+        pinned_entries: list[dict] = []
+        regular_entries: list[dict] = []
+
+        for p in files:
+            sid = p.stem
+            mtime = datetime.fromtimestamp(p.stat().st_mtime, tz=UTC)
+            date_str = mtime.strftime("%Y-%m-%d")
+            date_group = (
+                "Today"
+                if date_str == today_str
+                else mtime.strftime("%a %b %d %Y")
+            )
+
+            title = f"New session - {mtime.strftime('%Y-%m-%dT%H:%M:%S')}"
+            try:
+                with open(p, encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        # Check for explicit session title first
+                        for msg in data:
+                            if msg.get("role") == "system" and msg.get("_session_title"):
+                                title = msg["_session_title"]
+                                if len(title) > 48:
+                                    title = title[:45] + "..."
+                                break
+                        else:
+                            # Fall back to first user message
+                            for msg in data:
+                                if msg.get("role") == "user" and msg.get("content"):
+                                    first_prompt = msg["content"].strip().split("\n")[0]
+                                    if len(first_prompt) > 48:
+                                        first_prompt = first_prompt[:45] + "..."
+                                    title = first_prompt
+                                    break
+            except Exception:
+                pass
+
+            is_active = (sid == active_sid)
+            is_pinned = (sid in self.pinned_sessions)
+
+            entry = {
+                "id": sid,
+                "title": title,
+                "date_group": date_group,
+                "agent": "JARVIS",
+                "active": is_active,
+                "pinned": is_pinned,
+            }
+
+            if is_pinned:
+                pinned_entries.append(entry)
+            else:
+                regular_entries.append(entry)
+
+        # Add pinned sessions first under their own group
+        for entry in pinned_entries:
+            entry["date_group"] = "📌 Pinned"
+            sessions.append(entry)
+
+        # Then add regular sessions
+        sessions.extend(regular_entries)
+
+        return sessions
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self.populate_list(filter_text=event.value)
+
+    def populate_list(self, filter_text: str = "") -> None:
+        if not self.is_mounted:
+            return
+        self.option_list.clear_options()
+        query = filter_text.strip().lower()
+
+        current_group = ""
+        for s in self.sessions_data:
+            if query and query not in s["title"].lower():
+                continue
+
+            group = s["date_group"]
+            if group != current_group:
+                current_group = group
+                header_text = Text(f"\n{group}", style="bold #818cf8")
+                self.option_list.add_option(Option(header_text, disabled=True, id=f"grp-{group}"))
+
+            t = Text(no_wrap=True, overflow="ellipsis")
+            if s["id"] == "new":
+                t.append(f"  {s['title']}", style="bold #f97316")
+            else:
+                is_active = s.get("active", False)
+                is_pinned = s.get("pinned", False)
+
+                # Active marker
+                prefix = "✓ " if is_active else "  "
+                style_title = "white"
+                t.append(prefix, style="bold #22c55e" if is_active else "")
+                title_str = s['title']
+                if len(title_str) > 36:
+                    title_str = title_str[:33] + "..."
+                t.append(f"{title_str:<38}", style=style_title)
+
+                # Right-side info
+                info_parts = []
+                if is_pinned:
+                    info_parts.append("📌")
+                if "agent" in s:
+                    info_parts.append(s["agent"])
+                if info_parts:
+                    t.append(f" {'  '.join(info_parts)}", style="dim #64748b")
+
+            self.option_list.add_option(Option(t, id=s["id"]))
+
+    @on(OptionList.OptionSelected)
+    def on_option_selected(self, event: OptionList.OptionSelected) -> None:
+        selected_id = getattr(event, "option_id", None) or (
+            event.option.id if getattr(event, "option", None) else None
+        )
+        if selected_id and not str(selected_id).startswith("grp-"):
+            self.dismiss(str(selected_id))
+
+    def key_escape(self) -> None:
+        self.dismiss(None)

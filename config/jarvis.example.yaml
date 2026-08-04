@@ -1,0 +1,55 @@
+# Copy this file to create a jarvis.yaml with default values.
+# See config/jarvis.yaml for the full annotated configuration.
+
+jarvis:
+  name: "JARVIS"
+  version: "0.1.0"
+  persona: "professional_assistant"
+  log_level: "INFO"
+
+provider:
+  active: "groq"
+  model: "llama-3.3-70b-versatile"
+  temperature: 0.7
+  max_tokens: 4096
+
+memory:
+  conversation:
+    enabled: true
+  long_term:
+    enabled: true
+  vector:
+    enabled: false  # Requires embedding provider API key
+
+tools:
+  enabled: true
+  auto_approve: false
+  max_turns: 25
+  sandbox:
+    enabled: true
+    workspace: "."
+
+mcp:
+  enabled: true
+  auto_start: []                        # MCP servers to auto-start (e.g., ["gmail", "calendar"])
+  timeout: 30
+  servers_config: "src/jarvis/mcp/servers.json"
+  servers:
+    # All servers in src/jarvis/mcp/servers/ are auto-registered & enabled.
+    # Set "enabled: false" to disable a server.
+    # gmail:
+    #   enabled: false
+
+voice:
+  enabled: true
+  mode: "text"                          # text | voice (toggle with /voice in TUI)
+  tts:
+    provider: "edge_tts"                # edge_tts | elevenlabs
+    voice: "en-US-JennyNeural"          # voice name / id
+  stt:
+    provider: "sr"                      # sr | whisper
+    engine: "google"                    # sr recognizer engine
+    language: "en-US"
+
+ui:
+  default: "tui"

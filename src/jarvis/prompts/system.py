@@ -1,0 +1,50 @@
+"""
+System Prompt Builder — Constructs the full system prompt for the LLM.
+
+Combines persona, memory context, and tool descriptions into a
+comprehensive system prompt.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+logger = logging.getLogger(__name__)
+
+
+class SystemPromptBuilder:
+    """Builds the complete system prompt for JARVIS.
+
+    The system prompt includes:
+    1. JARVIS persona and behavior guidelines
+    2. Relevant memory context
+    3. Available tool descriptions
+    """
+
+    def build(
+        self,
+        persona: str = "",
+        memory_context: str = "",
+        tool_descriptions: str = "",
+        **kwargs: Any,
+    ) -> str:
+        """Build the complete system prompt.
+
+        Args:
+            persona: JARVIS persona instructions.
+            memory_context: Relevant memory context.
+            tool_descriptions: Available tool descriptions.
+
+        Returns:
+            Complete system prompt string.
+        """
+        parts = [persona]
+
+        if memory_context:
+            parts.append(f"\n## Memory Context\n{memory_context}")
+
+        if tool_descriptions:
+            parts.append(f"\n## Available Tools\n{tool_descriptions}")
+
+        return "\n\n".join(part for part in parts if part.strip())
