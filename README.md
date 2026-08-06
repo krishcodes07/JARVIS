@@ -219,6 +219,7 @@ JARVIS includes a full hands-free voice suite:
 
 JARVIS TUI supports rich interactive slash commands:
 
+- `/new` — Start a new conversation session with a unique session ID.
 - `/clear` — Reset conversation, delete current session, and start a fresh session (with top-right notification toast).
 - `/copy` — Copy the last AI assistant response directly to system clipboard silently.
 - `/models` — Open model selection modal or switch active LLM model.

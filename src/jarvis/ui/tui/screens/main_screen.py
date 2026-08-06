@@ -53,6 +53,7 @@ class MainScreen(Screen):
     """
 
     BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("ctrl+n", "new_session", "New Session", show=False),
         Binding("ctrl+m", "open_models", "Models", show=False),
         Binding("ctrl+s", "open_sessions", "Sessions", show=False),
         Binding("ctrl+h", "open_help", "Help", show=False),
@@ -384,7 +385,25 @@ class MainScreen(Screen):
                 self.chat_view.add_user_message(f"✓ Hands-free voice mode toggled: {status}")
             return
 
-        if cmd == "/clear":
+        if cmd == "/new":
+            new_session_id = "N/A"
+            if self.engine:
+                if self.engine.session:
+                    await self.engine.session.end()
+                from jarvis.core.session import Session
+                self.engine.session = Session(engine=self.engine)
+                new_session_id = self.engine.session.session_id
+
+            self.chat_view.clear_messages()
+            self.header.show_header()
+            self.prompt_box.show_hints()
+            self.show_toast(
+                f"New conversation session created (ID: {new_session_id})",
+                title="New Session",
+                style="success",
+            )
+
+        elif cmd == "/clear":
             old_session_id = "N/A"
             if self.engine:
                 if self.engine.session:
@@ -533,6 +552,9 @@ class MainScreen(Screen):
 
     def action_open_config(self) -> None:
         self.app.push_screen(ConfigModal(engine=self.engine))
+
+    async def action_new_session(self) -> None:
+        await self.handle_slash_command("/new")
 
     async def action_clear_screen(self) -> None:
         await self.handle_slash_command("/clear")

@@ -40,7 +40,7 @@ class MCPModal(ModalScreen[None]):
             title="MCP Servers",
             dialog_id="mcp-dialog",
             width=72,
-            height=22,
+            height="80%",
             show_search=True,
             search_placeholder="Search servers...",
             footer_text="Enter toggle   ↑↓ navigate   Esc close",
@@ -100,9 +100,11 @@ class MCPModal(ModalScreen[None]):
             if event.key == "up":
                 event.stop()
                 self.option_list.action_cursor_up()
+                self.option_list.scroll_to_highlight()
             elif event.key == "down":
                 event.stop()
                 self.option_list.action_cursor_down()
+                self.option_list.scroll_to_highlight()
             elif event.key == "enter":
                 event.stop()
                 self.option_list.action_select()

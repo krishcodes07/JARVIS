@@ -27,7 +27,7 @@ Screen {
 #chat-scroll {
     height: 1fr;
     border: none;
-    padding: 1 1 1 4;
+    padding: 1 1 1 1;
     overflow-y: auto;
     scrollbar-size-vertical: 0;
     scrollbar-size-horizontal: 0;

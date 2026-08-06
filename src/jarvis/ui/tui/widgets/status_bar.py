@@ -37,7 +37,7 @@ class TipBarWidget(Widget):
 
 
 class StatusBarWidget(Widget):
-    """Bottom status bar matching reference image."""
+    """Bottom status bar"""
 
     DEFAULT_CSS = """
     StatusBarWidget {
@@ -45,7 +45,7 @@ class StatusBarWidget(Widget):
         background: #000000;
         color: #737373;
         border: none;
-        margin: 0 4 1 4;
+        margin: 0 1 1 1;
         padding: 0;
     }
     """
@@ -76,18 +76,17 @@ class StatusBarWidget(Widget):
             branch = self._cached_branch
             location = f"{cwd}:{branch}" if branch else cwd
             left.append(location, style="dim #a3a3a3")
-            left_plain_len = len(location) + 4
+            left_plain_len = len(location) + 2
 
         right_raw = "tab commands   ctrl+s sessions"
 
         try:
-            term_width = self.app.size.width
+            width = self.size.width if (self.size and self.size.width > 0) else (self.app.size.width - 2)
         except Exception:
-            term_width = 120
+            width = 120
 
-        usable_width = max(60, term_width - 8)
         right_len = len(right_raw)
-        gap = max(1, usable_width - left_plain_len - right_len)
+        gap = max(1, width - left_plain_len - right_len)
 
         txt = Text(no_wrap=True, overflow="ellipsis")
         txt.append_text(left)

@@ -17,6 +17,7 @@ class SlashCommand:
 
 # Registry of available slash commands for UI autocomplete and execution
 COMMAND_REGISTRY: list[SlashCommand] = [
+    SlashCommand("/new", "Start a new conversation session", "/new", "action_new"),
     SlashCommand("/sessions", "Manage & switch conversation sessions", "/sessions", "action_sessions"),
     SlashCommand("/models", "Switch active model or browse providers", "/models [provider]", "action_models"),
     SlashCommand("/provider", "Switch active LLM provider", "/provider <name>", "action_provider"),

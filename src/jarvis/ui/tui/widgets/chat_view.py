@@ -155,7 +155,7 @@ class ChatViewWidget(VerticalScroll):
     DEFAULT_CSS = """
     ChatViewWidget {
         height: 1fr;
-        padding: 1 1 1 4;
+        padding: 1 1 1 1;
         overflow-y: scroll;
         scrollbar-size-vertical: 0;
         scrollbar-size-horizontal: 0;

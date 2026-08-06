@@ -22,7 +22,7 @@ class HelpModal(ModalScreen[None]):
     }
 
     #help-content {
-        height: 20;
+        height: 1fr;
         margin-top: 1;
         overflow-y: scroll;
     }
@@ -34,7 +34,7 @@ class HelpModal(ModalScreen[None]):
             title="JARVIS Help & Shortcuts",
             dialog_id="help-dialog",
             width=76,
-            height=24,
+            height="80%",
             show_search=False,
             border_style="solid #3b82f6",
         )
@@ -54,6 +54,8 @@ class HelpModal(ModalScreen[None]):
             txt.append(f" - {cmd.description}\n", style="dim white")
 
         txt.append("\nKeyboard Shortcuts:\n", style="bold #60a5fa")
+        txt.append("  Ctrl+N            ", style="bold white")
+        txt.append(" - Start a new conversation session\n", style="dim white")
         txt.append("  Ctrl+P / /        ", style="bold white")
         txt.append(" - Open Slash Command Palette\n", style="dim white")
         txt.append("  Ctrl+M            ", style="bold white")

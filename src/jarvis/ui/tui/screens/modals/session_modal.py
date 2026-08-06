@@ -76,7 +76,7 @@ class SessionModal(ModalScreen[str | None]):
             title="Sessions",
             dialog_id="session-dialog",
             width=66,
-            height=21,
+            height="80%",
             show_search=True,
             search_placeholder="Search sessions...",
             footer_text="pin/unpin ctrl+f   delete ctrl+d   rename ctrl+r",
@@ -137,9 +137,11 @@ class SessionModal(ModalScreen[str | None]):
             if event.key == "up":
                 event.stop()
                 self.option_list.action_cursor_up()
+                self.option_list.scroll_to_highlight()
             elif event.key == "down":
                 event.stop()
                 self.option_list.action_cursor_down()
+                self.option_list.scroll_to_highlight()
             elif event.key == "enter":
                 event.stop()
                 self.option_list.action_select()

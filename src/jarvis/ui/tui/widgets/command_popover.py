@@ -20,14 +20,14 @@ class CommandPopoverWidget(Widget):
     CommandPopoverWidget {
         layer: overlay;
         dock: bottom;
-        offset: 0 -7;
+        offset: -3 -7;
         width: 1fr;
         max-height: 10;
         height: auto;
         background: #1e1e1e;
         border: none;
         border-left: tall #3b82f6;
-        margin: 0 4 0 4;
+        margin: 0 1 0 1;
         padding: 0 1;
         display: none;
     }

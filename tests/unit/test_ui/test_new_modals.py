@@ -40,3 +40,14 @@ def test_app_import():
     app = JarvisTUIApp(engine=None)
     assert app.TITLE == "JARVIS AI Assistant"
 
+
+def test_slash_command_new_registration():
+    from jarvis.ui.tui.commands import COMMAND_REGISTRY, filter_commands, get_command
+    cmd = get_command("/new")
+    assert cmd is not None
+    assert cmd.name == "/new"
+    assert "Start a new conversation session" in cmd.description
+    filtered = filter_commands("/new")
+    assert len(filtered) == 1
+    assert filtered[0].name == "/new"
+

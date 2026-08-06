@@ -42,7 +42,7 @@ class DebugModal(ModalScreen[None]):
             title="Engine Debug Information",
             dialog_id="debug-dialog",
             width=70,
-            height=22,
+            height="80%",
             show_search=False,
             footer_text="Esc / Enter close",
             border_style="solid #f97316",

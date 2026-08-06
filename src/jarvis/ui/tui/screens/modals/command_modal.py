@@ -31,7 +31,7 @@ class CommandModal(ModalScreen[SlashCommand | None]):
             title="Commands",
             dialog_id="cmd-dialog",
             width=76,
-            height=22,
+            height="80%",
             show_search=True,
             search_placeholder="Type command...",
             border_style="solid #3b82f6",
@@ -58,6 +58,21 @@ class CommandModal(ModalScreen[SlashCommand | None]):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         self.populate_list(filter_text=event.value)
+
+    def on_key(self, event) -> None:
+        """Delegate arrow keys and Enter from search input to the option list."""
+        if self.search_input and self.search_input.has_focus:
+            if event.key == "up":
+                event.stop()
+                self.option_list.action_cursor_up()
+                self.option_list.scroll_to_highlight()
+            elif event.key == "down":
+                event.stop()
+                self.option_list.action_cursor_down()
+                self.option_list.scroll_to_highlight()
+            elif event.key == "enter":
+                event.stop()
+                self.option_list.action_select()
 
     def populate_list(self, filter_text: str = "") -> None:
         if not self.is_mounted:

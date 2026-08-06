@@ -107,7 +107,7 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
             title="Select model",
             dialog_id="model-dialog",
             width=62,
-            height=22,
+            height="80%",
             show_search=True,
             search_placeholder="Search...",
             footer_text="↑↓ navigate   Enter select   Esc cancel",
@@ -153,9 +153,11 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
             if event.key == "up":
                 event.stop()
                 self.option_list.action_cursor_up()
+                self.option_list.scroll_to_highlight()
             elif event.key == "down":
                 event.stop()
                 self.option_list.action_cursor_down()
+                self.option_list.scroll_to_highlight()
             elif event.key == "enter":
                 event.stop()
                 self.option_list.action_select()

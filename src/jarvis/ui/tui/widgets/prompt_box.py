@@ -50,7 +50,7 @@ class PromptBoxWidget(Widget):
         border: none;
         border-left: tall #3b82f6;
         height: auto;
-        margin: 0 4 0 4;
+        margin: 0 1 0 1;
         padding: 1 2 1 2;
     }
 

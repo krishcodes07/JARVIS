@@ -34,7 +34,7 @@ class ConfigModal(ModalScreen[None]):
             title="JARVIS Configuration",
             dialog_id="config-dialog",
             width=68,
-            height=20,
+            height="80%",
             show_search=False,
             footer_text="Esc / Enter close",
             border_style="solid #3b82f6",
