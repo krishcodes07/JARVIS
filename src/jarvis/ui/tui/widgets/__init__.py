@@ -8,6 +8,7 @@ from jarvis.ui.tui.widgets.header import HeaderWidget
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
 from jarvis.ui.tui.widgets.prompt_box import PromptBoxWidget, PromptInputTextArea
 from jarvis.ui.tui.widgets.status_bar import StatusBarWidget, TipBarWidget
+from jarvis.ui.tui.widgets.toast import NotificationToast
 
 __all__ = [
     "AssistantFooterWidget",
@@ -16,6 +17,7 @@ __all__ = [
     "HeaderWidget",
     "MessageWidget",
     "ModalDialog",
+    "NotificationToast",
     "PromptBoxWidget",
     "PromptInputTextArea",
     "StatusBarWidget",

@@ -113,6 +113,9 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
             footer_text="↑↓ navigate   Enter select   Esc cancel",
         )
         self.models_data: list[dict[str, Any]] = []
+        self._is_loading: bool = True
+        self._loading_timer = None
+        self._loading_frame: int = 0
 
     @property
     def search_input(self) -> Input | None:
@@ -128,9 +131,21 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
     def on_mount(self) -> None:
         if self.search_input:
             self.search_input.focus()
-        self.models_data = self._build_models_data()
+        self._is_loading = True
+        self._loading_frame = 0
+        self._loading_timer = self.set_interval(0.3, self._animate_loading)
         self.populate_list()
         self.refresh_all_provider_models()
+
+    def _animate_loading(self) -> None:
+        if self._is_loading and self.is_mounted:
+            self._loading_frame += 1
+            self.populate_list(self.search_input.value if self.search_input else "")
+
+    def on_unmount(self) -> None:
+        if self._loading_timer:
+            self._loading_timer.stop()
+            self._loading_timer = None
 
     def on_key(self, event) -> None:
         """Delegate arrow keys and Enter from search input to the option list."""
@@ -214,31 +229,38 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
     @work(exclusive=True)
     async def refresh_all_provider_models(self) -> None:
         """Asynchronously fetch live models from all providers and update disk cache."""
-        if not self.engine or not self.engine.provider_manager:
-            return
-
-        all_defs = self.engine.provider_manager.registry.get_all()
-        models_cache = load_models_cache()
-        updated = False
-
-        for prov_name in sorted(all_defs.keys()):
-            try:
-                live_list = await self.engine.provider_manager.get_models(prov_name)
-                if live_list:
-                    models_cache[prov_name.lower()] = [
-                        {
-                            "id": str(m.get("id") or str(m)),
-                            "name": str(m.get("name") or m.get("id") or str(m)),
-                        }
-                        for m in live_list
-                    ]
-                    updated = True
-            except Exception as e:
-                logger.debug(f"Could not refresh models for provider {prov_name}: {e}")
-
-        if updated:
-            save_models_cache(models_cache)
+        try:
             self.models_data = self._build_models_data()
+            if not self.engine or not self.engine.provider_manager:
+                return
+
+            all_defs = self.engine.provider_manager.registry.get_all()
+            models_cache = load_models_cache()
+            updated = False
+
+            for prov_name in sorted(all_defs.keys()):
+                try:
+                    live_list = await self.engine.provider_manager.get_models(prov_name)
+                    if live_list:
+                        models_cache[prov_name.lower()] = [
+                            {
+                                "id": str(m.get("id") or str(m)),
+                                "name": str(m.get("name") or m.get("id") or str(m)),
+                            }
+                            for m in live_list
+                        ]
+                        updated = True
+                except Exception as e:
+                    logger.debug(f"Could not refresh models for provider {prov_name}: {e}")
+
+            if updated:
+                save_models_cache(models_cache)
+                self.models_data = self._build_models_data()
+        finally:
+            self._is_loading = False
+            if self._loading_timer:
+                self._loading_timer.stop()
+                self._loading_timer = None
             if self.is_mounted:
                 self.populate_list(self.search_input.value if self.search_input else "")
 
@@ -249,6 +271,15 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
         if not self.is_mounted:
             return
         self.option_list.clear_options()
+
+        if self._is_loading:
+            dots = "." * ((self._loading_frame % 3) + 1)
+            for _ in range(4):
+                self.option_list.add_option(Option(Text(""), disabled=True))
+            msg = f"Fetching models {dots:<3}"
+            t = Text(msg.center(54), style="bold #3b82f6")
+            self.option_list.add_option(Option(t, disabled=True))
+            return
         query = filter_text.strip().lower()
 
         current_category = ""

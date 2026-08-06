@@ -46,6 +46,9 @@ class MCPModal(ModalScreen[None]):
             footer_text="Enter toggle   ↑↓ navigate   Esc close",
         )
         self.servers_data: list[dict[str, Any]] = []
+        self._is_loading: bool = True
+        self._loading_timer = None
+        self._loading_frame: int = 0
 
     @property
     def search_input(self) -> Input | None:
@@ -61,8 +64,35 @@ class MCPModal(ModalScreen[None]):
     def on_mount(self) -> None:
         if self.search_input:
             self.search_input.focus()
-        self._refresh_servers_data()
+        self._is_loading = True
+        self._loading_frame = 0
+        self._loading_timer = self.set_interval(0.3, self._animate_loading)
         self.populate_list()
+        self.load_mcp_servers_async()
+
+    def _animate_loading(self) -> None:
+        if self._is_loading and self.is_mounted:
+            self._loading_frame += 1
+            self.populate_list(self.search_input.value if self.search_input else "")
+
+    def on_unmount(self) -> None:
+        if self._loading_timer:
+            self._loading_timer.stop()
+            self._loading_timer = None
+
+    @work(exclusive=True)
+    async def load_mcp_servers_async(self) -> None:
+        try:
+            self._refresh_servers_data()
+            import asyncio
+            await asyncio.sleep(0.15)
+        finally:
+            self._is_loading = False
+            if self._loading_timer:
+                self._loading_timer.stop()
+                self._loading_timer = None
+            if self.is_mounted:
+                self.populate_list(self.search_input.value if self.search_input else "")
 
     def on_key(self, event) -> None:
         """Delegate arrow keys and Enter from search input to the option list."""
@@ -138,6 +168,16 @@ class MCPModal(ModalScreen[None]):
         if not self.is_mounted:
             return
         self.option_list.clear_options()
+
+        if self._is_loading:
+            dots = "." * ((self._loading_frame % 3) + 1)
+            for _ in range(4):
+                self.option_list.add_option(Option(Text(""), disabled=True))
+            msg = f"Fetching MCP servers {dots:<3}"
+            t = Text(msg.center(64), style="bold #22c55e")
+            self.option_list.add_option(Option(t, disabled=True))
+            return
+
         query = filter_text.strip().lower()
 
         connected = [s for s in self.servers_data if s["connected"]]
@@ -242,30 +282,43 @@ class MCPModal(ModalScreen[None]):
         if not self.engine or not self.engine.mcp_manager:
             return
 
+        self._is_loading = True
+        self._loading_frame = 0
+        if not self._loading_timer:
+            self._loading_timer = self.set_interval(0.3, self._animate_loading)
+        if self.is_mounted:
+            self.populate_list(self.search_input.value if self.search_input else "")
+
         mgr = self.engine.mcp_manager
         conn = mgr.client.connections.get(server_name)
 
-        if conn and conn.connected:
-            # Disconnect (disable)
-            try:
-                await mgr.client.disconnect(server_name)
-                logger.info("MCP server '%s' disabled via modal.", server_name)
-            except Exception as e:
-                logger.warning("Failed to disconnect MCP server '%s': %s", server_name, e)
-        else:
-            # Reconnect (enable)
-            target_config = mgr.get_server_config(server_name, force_enabled=True)
-            if target_config:
+        try:
+            if conn and conn.connected:
+                # Disconnect (disable)
                 try:
-                    await mgr.client.connect(target_config)
-                    logger.info("MCP server '%s' enabled via modal.", server_name)
+                    await mgr.client.disconnect(server_name)
+                    logger.info("MCP server '%s' disabled via modal.", server_name)
                 except Exception as e:
-                    logger.warning("Failed to connect MCP server '%s': %s", server_name, e)
+                    logger.warning("Failed to disconnect MCP server '%s': %s", server_name, e)
+            else:
+                # Reconnect (enable)
+                target_config = mgr.get_server_config(server_name, force_enabled=True)
+                if target_config:
+                    try:
+                        await mgr.client.connect(target_config)
+                        logger.info("MCP server '%s' enabled via modal.", server_name)
+                    except Exception as e:
+                        logger.warning("Failed to connect MCP server '%s': %s", server_name, e)
 
-        # Refresh the list
-        self._refresh_servers_data()
-        if self.is_mounted:
-            self.populate_list(self.search_input.value if self.search_input else "")
+            # Refresh the list
+            self._refresh_servers_data()
+        finally:
+            self._is_loading = False
+            if self._loading_timer:
+                self._loading_timer.stop()
+                self._loading_timer = None
+            if self.is_mounted:
+                self.populate_list(self.search_input.value if self.search_input else "")
 
     def key_escape(self) -> None:
         self.dismiss(None)

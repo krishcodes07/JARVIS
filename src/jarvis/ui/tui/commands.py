@@ -22,6 +22,7 @@ COMMAND_REGISTRY: list[SlashCommand] = [
     SlashCommand("/provider", "Switch active LLM provider", "/provider <name>", "action_provider"),
     SlashCommand("/connect", "Connect model or API provider", "/connect <provider>", "action_connect"),
     SlashCommand("/clear", "Start a new conversation session", "/clear", "action_clear"),
+    SlashCommand("/copy", "Copy last AI response to clipboard", "/copy", "action_copy"),
     SlashCommand("/config", "View current JARVIS configuration", "/config", "action_config"),
     SlashCommand("/mcp", "View MCP server status and connections", "/mcp", "action_mcps"),
     SlashCommand("/voice", "Toggle or set text/voice mode", "/voice [text|voice]", "action_voice"),

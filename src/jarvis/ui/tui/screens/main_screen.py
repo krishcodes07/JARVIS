@@ -6,9 +6,10 @@ OpenCode/ClaudeCode layout: header hides on first message, compact prompt at bot
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Literal
 
 from textual import events, on, work
 from textual.binding import Binding, BindingType
@@ -30,6 +31,7 @@ from jarvis.ui.tui.widgets import (
     ChatViewWidget,
     CommandPopoverWidget,
     HeaderWidget,
+    NotificationToast,
     PromptBoxWidget,
     PromptInputTextArea,
     StatusBarWidget,
@@ -54,6 +56,7 @@ class MainScreen(Screen):
         Binding("ctrl+m", "open_models", "Models", show=False),
         Binding("ctrl+s", "open_sessions", "Sessions", show=False),
         Binding("ctrl+h", "open_help", "Help", show=False),
+        Binding("ctrl+l", "clear_screen", "Clear", show=False),
         Binding("alt+v", "toggle_voice", "Voice Mode", show=False),
     ]
 
@@ -66,9 +69,9 @@ class MainScreen(Screen):
         self.popover = CommandPopoverWidget(id="command-popover")
         self.prompt_box = PromptBoxWidget(id="prompt-card")
         self.status_bar = StatusBarWidget(id="status-bar")
+        self.toast = NotificationToast(id="notification-toast")
         self._is_generating: bool = False
         self._current_worker = None
-
 
     def compose(self):
         yield self.header
@@ -76,6 +79,17 @@ class MainScreen(Screen):
         yield self.popover
         yield self.prompt_box
         yield self.status_bar
+        yield self.toast
+
+    def show_toast(
+        self,
+        message: str,
+        title: str = "Notification",
+        style: Literal["info", "success", "warning", "error"] = "info",
+        duration: float = 3.5,
+    ) -> None:
+        """Show a floating toast notification overlay."""
+        self.toast.show_toast(message, title=title, style=style, duration=duration)
 
     def on_mount(self) -> None:
         self.prompt_box.input_field.focus()
@@ -132,23 +146,31 @@ class MainScreen(Screen):
         val = self.prompt_box.text
         is_slash = val.startswith("/")
 
-        if self.prompt_box.input_field.has_focus:
-            if event.key == "tab":
-                if is_slash:
-                    selected_cmd = self.popover.get_selected_command()
-                    if selected_cmd:
-                        # Autocomplete text into input box so user can add arguments
-                        self.prompt_box.text = selected_cmd.name + " "
-                        self.popover.hide()
-                        event.prevent_default()
-                        event.stop()
-                        return
+        if event.key == "tab":
+            if not self.prompt_box.input_field.has_focus:
+                with contextlib.suppress(Exception):
+                    self.prompt_box.input_field.focus()
+
+            if is_slash:
+                selected_cmd = self.popover.get_selected_command()
+                if selected_cmd:
+                    # Autocomplete text into input box so user can add arguments
+                    self.prompt_box.text = selected_cmd.name + " "
+                    self.popover.hide()
                 else:
-                    # Do not destroy user prompt when Tab is pressed on normal text
-                    event.prevent_default()
-                    event.stop()
-                    return
-            elif is_slash and event.key == "down":
+                    self.popover.update_query(val)
+            else:
+                # Only insert '/' if prompt is empty; if user has already typed something, do nothing
+                if not val.strip():
+                    self.prompt_box.text = "/"
+                    self.popover.update_query(self.prompt_box.text)
+
+            event.prevent_default()
+            event.stop()
+            return
+
+        if self.prompt_box.input_field.has_focus:
+            if is_slash and event.key == "down":
                 self.popover.highlight_next()
                 event.prevent_default()
                 event.stop()
@@ -181,12 +203,17 @@ class MainScreen(Screen):
         if user_input.startswith("/") and selected_cmd and len(user_input) < len(selected_cmd.name):
             user_input = selected_cmd.name
 
-        self.prompt_box.clear()
-        self.popover.hide()
-
         if user_input.startswith("/"):
+            self.prompt_box.clear()
+            self.popover.hide()
             await self.handle_slash_command(user_input)
             return
+
+        if self._is_generating or self.voice_controller.is_active:
+            return
+
+        self.prompt_box.clear()
+        self.popover.hide()
 
         self.chat_view.add_user_message(user_input)
         self.process_user_query(user_input)
@@ -235,7 +262,7 @@ class MainScreen(Screen):
 
         except asyncio.CancelledError:
             logger.info("Chat stream cancelled by user.")
-            self.chat_view.add_error_message("Generation stopped by user.")
+            self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
         except Exception as e:
             logger.exception("Error during chat processing")
             self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
@@ -339,8 +366,8 @@ class MainScreen(Screen):
         args = parts[1:]
 
         modal_handlers = {
-            "/exit": self.app.exit,
-            "/quit": self.app.exit,
+            "/exit": lambda: self.app.exit(),
+            "/quit": lambda: self.app.exit(),
             "/sessions": self.action_open_sessions,
             "/models": self.action_open_models,
             "/help": self.action_open_help,
@@ -358,12 +385,37 @@ class MainScreen(Screen):
             return
 
         if cmd == "/clear":
+            old_session_id = "N/A"
             if self.engine:
+                if self.engine.session:
+                    old_session_id = self.engine.session.session_id
+                    await self.engine.session.end()
+                if self.engine.memory_manager and self.engine.memory_manager.conversation:
+                    await self.engine.memory_manager.conversation.delete(old_session_id)
                 from jarvis.core.session import Session
                 self.engine.session = Session(engine=self.engine)
+
             self.chat_view.clear_messages()
             self.header.show_header()
             self.prompt_box.show_hints()
+            self.show_toast(
+                f"Session deleted of ID {old_session_id}",
+                title="Session Reset",
+                style="info",
+            )
+
+        elif cmd == "/copy":
+            last_text = ""
+            for child in reversed(list(self.chat_view.children)):
+                if getattr(child, "role", "") == "assistant" and hasattr(child, "raw_content"):
+                    last_text = child.raw_content
+                    break
+            if last_text:
+                try:
+                    import pyperclip  # type: ignore
+                    pyperclip.copy(last_text)
+                except Exception:
+                    pass
 
         elif cmd == "/provider":
             if args and self.engine and self.engine.provider_manager:
@@ -481,6 +533,9 @@ class MainScreen(Screen):
 
     def action_open_config(self) -> None:
         self.app.push_screen(ConfigModal(engine=self.engine))
+
+    async def action_clear_screen(self) -> None:
+        await self.handle_slash_command("/clear")
 
     def action_open_debug(self) -> None:
         self.app.push_screen(

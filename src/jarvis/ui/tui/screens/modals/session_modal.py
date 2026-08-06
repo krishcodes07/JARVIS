@@ -57,6 +57,8 @@ def _save_pinned_sessions(pinned: set[str]) -> None:
         logger.warning(f"Could not save pinned_sessions.json: {e}")
 
 
+from textual import work
+
 class SessionModal(ModalScreen[str | None]):
     """Modal dialog for session management, searching, and switching."""
 
@@ -81,6 +83,9 @@ class SessionModal(ModalScreen[str | None]):
         )
         self.sessions_data: list[dict] = []
         self.pinned_sessions: set[str] = _load_pinned_sessions()
+        self._is_loading: bool = True
+        self._loading_timer = None
+        self._loading_frame: int = 0
 
     @property
     def search_input(self) -> Input | None:
@@ -96,9 +101,35 @@ class SessionModal(ModalScreen[str | None]):
     def on_mount(self) -> None:
         if self.search_input:
             self.search_input.focus()
-        self.sessions_data = self.load_real_sessions()
-        # Defer populate to ensure the option list widget is fully mounted
-        self.call_after_refresh(self.populate_list)
+        self._is_loading = True
+        self._loading_frame = 0
+        self._loading_timer = self.set_interval(0.3, self._animate_loading)
+        self.populate_list()
+        self.load_sessions_async()
+
+    def _animate_loading(self) -> None:
+        if self._is_loading and self.is_mounted:
+            self._loading_frame += 1
+            self.populate_list(self.search_input.value if self.search_input else "")
+
+    def on_unmount(self) -> None:
+        if self._loading_timer:
+            self._loading_timer.stop()
+            self._loading_timer = None
+
+    @work(exclusive=True)
+    async def load_sessions_async(self) -> None:
+        try:
+            self.sessions_data = self.load_real_sessions()
+            import asyncio
+            await asyncio.sleep(0.15)
+        finally:
+            self._is_loading = False
+            if self._loading_timer:
+                self._loading_timer.stop()
+                self._loading_timer = None
+            if self.is_mounted:
+                self.populate_list(self.search_input.value if self.search_input else "")
 
     def on_key(self, event) -> None:
         """Delegate arrow keys and Enter from search input to the option list."""
@@ -323,6 +354,16 @@ class SessionModal(ModalScreen[str | None]):
         if not self.is_mounted:
             return
         self.option_list.clear_options()
+
+        if self._is_loading:
+            dots = "." * ((self._loading_frame % 3) + 1)
+            for _ in range(4):
+                self.option_list.add_option(Option(Text(""), disabled=True))
+            msg = f"Loading sessions {dots:<3}"
+            t = Text(msg.center(58), style="bold #818cf8")
+            self.option_list.add_option(Option(t, disabled=True))
+            return
+
         query = filter_text.strip().lower()
 
         current_group = ""

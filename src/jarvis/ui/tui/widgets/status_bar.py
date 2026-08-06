@@ -54,6 +54,10 @@ class StatusBarWidget(Widget):
         super().__init__(**kwargs)
         self.version = version
         self.is_generating: bool = False
+        self._cached_branch: str = "main"
+
+    def on_mount(self) -> None:
+        self._cached_branch = self._get_git_branch()
 
     def set_generating(self, generating: bool) -> None:
         self.is_generating = generating
@@ -69,7 +73,7 @@ class StatusBarWidget(Widget):
             left_plain_len = 15
         else:
             cwd = os.getcwd()
-            branch = self._get_git_branch()
+            branch = self._cached_branch
             location = f"{cwd}:{branch}" if branch else cwd
             left.append(location, style="dim #a3a3a3")
             left_plain_len = len(location) + 4

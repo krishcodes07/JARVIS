@@ -174,17 +174,22 @@ class ChatViewWidget(VerticalScroll):
         self._last_tool_widget: ToolCallWidget | None = None
         self._start_time: float = 0.0
         self._has_messages: bool = False
+        self._loading_timer = None
+        self._loading_frame: int = 0
+        self._is_first_chunk: bool = False
 
     @property
     def has_messages(self) -> bool:
         return self._has_messages
 
     def clear_messages(self) -> None:
+        self._stop_loading_timer()
         for child in list(self.children):
             child.remove()
         self._current_assistant_widget = None
         self._last_tool_widget = None
         self._has_messages = False
+        self._is_first_chunk = False
         self.add_class("hidden")
 
     def _mark_has_messages(self) -> None:
@@ -198,7 +203,22 @@ class ChatViewWidget(VerticalScroll):
             except Exception:
                 pass
 
+    def _stop_loading_timer(self) -> None:
+        if self._loading_timer:
+            self._loading_timer.stop()
+            self._loading_timer = None
+
+    def _update_loading_dots(self) -> None:
+        if self._current_assistant_widget and self._is_first_chunk:
+            dots = "." * ((self._loading_frame % 3) + 1)
+            self._loading_frame += 1
+            self._current_assistant_widget.update_content(dots)
+
+    def on_unmount(self) -> None:
+        self._stop_loading_timer()
+
     def add_user_message(self, text: str) -> None:
+        self._stop_loading_timer()
         self._mark_has_messages()
         msg = MessageWidget(content=text, role="user")
         self.mount(msg)
@@ -211,10 +231,12 @@ class ChatViewWidget(VerticalScroll):
         self.scroll_end(animate=False)
 
     def add_tool_call(self, tool_name: str, args_str: str) -> ToolCallWidget:
+        self._stop_loading_timer()
         if self._current_assistant_widget is not None:
-            if not self._current_assistant_widget.raw_content.strip():
+            if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
                 self._current_assistant_widget.remove()
-            self._current_assistant_widget = None
+                self._current_assistant_widget = None
+                self._is_first_chunk = False
 
         tool_w = ToolCallWidget(tool_name=tool_name, args_str=args_str)
         self.mount(tool_w)
@@ -223,10 +245,12 @@ class ChatViewWidget(VerticalScroll):
         return tool_w
 
     def add_tool_output(self, output_text: str = "no output") -> None:
+        self._stop_loading_timer()
         if self._current_assistant_widget is not None:
-            if not self._current_assistant_widget.raw_content.strip():
+            if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
                 self._current_assistant_widget.remove()
-            self._current_assistant_widget = None
+                self._current_assistant_widget = None
+                self._is_first_chunk = False
 
         if self._last_tool_widget is not None:
             self._last_tool_widget.set_output(output_text)
@@ -239,6 +263,11 @@ class ChatViewWidget(VerticalScroll):
         self.scroll_end(animate=False)
 
     def add_error_message(self, text: str) -> None:
+        self._stop_loading_timer()
+        if self._current_assistant_widget is not None and self._is_first_chunk:
+            self._current_assistant_widget.remove()
+            self._current_assistant_widget = None
+            self._is_first_chunk = False
         msg = MessageWidget(content=text, role="error")
         self.mount(msg)
         self.scroll_end(animate=False)
@@ -246,7 +275,17 @@ class ChatViewWidget(VerticalScroll):
     def start_assistant_stream(self) -> MessageWidget | None:
         self._mark_has_messages()
         self._start_time = time.time()
-        self._current_assistant_widget = None
+        self._loading_frame = 0
+        self._is_first_chunk = True
+
+        msg = MessageWidget(content=".", role="assistant")
+        self.mount(msg)
+        self._current_assistant_widget = msg
+
+        self._stop_loading_timer()
+        self._loading_timer = self.set_interval(0.3, self._update_loading_dots)
+
+        self.scroll_end(animate=False)
         return self._current_assistant_widget
 
     def append_assistant_chunk(self, chunk: str) -> None:
@@ -255,6 +294,12 @@ class ChatViewWidget(VerticalScroll):
         self._mark_has_messages()
         if self._start_time == 0.0:
             self._start_time = time.time()
+
+        if self._is_first_chunk:
+            self._is_first_chunk = False
+            self._stop_loading_timer()
+            if self._current_assistant_widget:
+                self._current_assistant_widget.raw_content = ""
 
         if self._current_assistant_widget is None:
             msg = MessageWidget(content="", role="assistant")
@@ -271,6 +316,12 @@ class ChatViewWidget(VerticalScroll):
     def finish_assistant_stream(
         self, mode: str = "", model_name: str = ""
     ) -> None:
+        self._stop_loading_timer()
+        if self._current_assistant_widget is not None and self._is_first_chunk:
+            if not self._current_assistant_widget.raw_content.strip():
+                self._current_assistant_widget.remove()
+                self._current_assistant_widget = None
+            self._is_first_chunk = False
         elapsed_sec = time.time() - self._start_time if self._start_time > 0 else 0
         elapsed_str = f"{elapsed_sec:.1f}s"
         footer = AssistantFooterWidget(mode=mode, model=model_name, elapsed=elapsed_str)

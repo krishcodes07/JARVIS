@@ -45,6 +45,7 @@ dependencies = [
 
     # TUI
     "textual>=1.0",
+    "pyperclip>=1.8.0",
 
     # GUI
     "customtkinter>=5.2",

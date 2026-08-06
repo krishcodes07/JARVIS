@@ -179,6 +179,7 @@ class PromptBoxWidget(Widget):
     def on_text_changed(self, event: TextArea.Changed) -> None:
         self.update_input_height()
 
+
     def set_listening_state(self, listening: bool) -> None:
         if listening:
             self.input_field.placeholder = "Listening... speak now"
@@ -243,6 +244,13 @@ class PromptBoxWidget(Widget):
     @text.setter
     def text(self, val: str) -> None:
         self.input_field.load_text(val)
+        lines = val.split("\n")
+        last_row = max(0, len(lines) - 1)
+        last_col = len(lines[last_row]) if lines else 0
+        try:
+            self.input_field.move_cursor((last_row, last_col))
+        except Exception:
+            pass
         self.update_input_height()
 
     def clear(self) -> None:

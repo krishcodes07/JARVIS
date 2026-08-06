@@ -27,11 +27,17 @@ class ClipboardTool(BaseTool):
 
     async def execute(self, **kwargs: Any) -> str:
         """Execute clipboard operation."""
-        # TODO: Implement using pyperclip or native APIs
         action = kwargs["action"]
-        if action == "copy":
-            text = kwargs.get("text", "")
-            return f"Copied to clipboard: {text[:50]}..."
-        elif action == "paste":
-            return "[Clipboard paste — not yet implemented]"
-        return f"Unknown action: {action}"
+        text = kwargs.get("text", "")
+        try:
+            import pyperclip  # type: ignore
+
+            if action == "copy":
+                pyperclip.copy(text)
+                return f"Copied to clipboard: {text[:50]}..."
+            elif action == "paste":
+                content = pyperclip.paste()
+                return content
+            return f"Unknown action: {action}"
+        except Exception as e:
+            return f"Clipboard operation failed: {e}"

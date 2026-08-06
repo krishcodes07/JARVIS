@@ -292,6 +292,7 @@ class JarvisEngine:
 
         accumulated_assistant_chunks: list[str] = []
         max_turns = self.config.tools.max_turns if (self.config and self.config.tools) else 25
+        saved_assistant_msg = False
 
         try:
             for _ in range(max_turns):
@@ -318,6 +319,7 @@ class JarvisEngine:
                     final_text = "".join(content_parts)
                     if self.memory_manager:
                         await self.memory_manager.add_message(session_id, "assistant", final_text)
+                        saved_assistant_msg = True
                     self._schedule_memory_extraction(session_id, message, final_text)
                     return
 
@@ -369,11 +371,13 @@ class JarvisEngine:
                             name=tool_name,
                         )
                     )
-        except Exception as err:
-            partial_text = "".join(accumulated_assistant_chunks).strip()
-            if partial_text and self.memory_manager:
-                with contextlib.suppress(Exception):
-                    await self.memory_manager.add_message(session_id, "assistant", partial_text)
+        except (Exception, asyncio.CancelledError, BaseException) as err:
+            if not saved_assistant_msg:
+                partial_text = "".join(accumulated_assistant_chunks).strip()
+                if partial_text and self.memory_manager:
+                    with contextlib.suppress(Exception):
+                        await self.memory_manager.add_message(session_id, "assistant", partial_text)
+                        saved_assistant_msg = True
             raise err
 
         yield "Reached maximum tool execution turns limit."

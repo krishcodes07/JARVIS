@@ -215,12 +215,22 @@ JARVIS includes a full hands-free voice suite:
 - **Text-to-Speech (TTS)**: Free streaming via `edge_tts` or high-fidelity AI voices with `elevenlabs`.
 - **Speech-to-Text (STT)**: `SpeechRecognition` engines (Google, Sphinx, Vosk) or local offline STT with `faster-whisper`.
 
-### Voice Commands in TUI
+### Terminal UI Slash Commands
 
-- `/voice` — Toggle voice conversation mode on/off
-- `/tts <provider>` — Switch TTS provider (`edge_tts` / `elevenlabs`)
-- `/stt <provider>` — Switch STT provider (`sr` / `whisper`)
-- `/voices` — List available TTS voices
+JARVIS TUI supports rich interactive slash commands:
+
+- `/clear` — Reset conversation, delete current session, and start a fresh session (with top-right notification toast).
+- `/copy` — Copy the last AI assistant response directly to system clipboard silently.
+- `/models` — Open model selection modal or switch active LLM model.
+- `/sessions` — Manage and switch active conversation sessions.
+- `/mcp` — Open MCP server manager modal and inspect connections.
+- `/voice` — Toggle hands-free voice mode on/off.
+- `/tts <provider>` — Switch TTS provider (`edge_tts` / `elevenlabs`).
+- `/stt <provider>` — Switch STT provider (`sr` / `whisper`).
+- `/voices` — List available TTS voices.
+- `/config` — View and edit active runtime configuration.
+- `/debug` — Inspect system status, provider metrics, and event diagnostics.
+- `/help` — Display commands overview and keybindings.
 
 ---
 
