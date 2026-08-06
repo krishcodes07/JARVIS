@@ -4,10 +4,8 @@ Searches previous sent and received emails to discover email addresses for a giv
 """
 
 import email
-from email.utils import parseaddr
 import imaplib
-import re
-from typing import Dict, List, Set, Tuple
+from email.utils import parseaddr
 
 from ..config import get_credentials
 
@@ -20,9 +18,9 @@ DESCRIPTION = (
 
 def _extract_contacts_from_folder(
     mail: imaplib.IMAP4_SSL, folder: str, query_name: str, max_fetch: int = 15
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     """Helper to search a mail folder and parse From/To contact info."""
-    contacts: List[Tuple[str, str]] = []
+    contacts: list[tuple[str, str]] = []
     try:
         status, _ = mail.select(folder, readonly=True)
         if status != "OK":
@@ -91,8 +89,8 @@ def search_contacts(name: str, count: int = 10) -> str:
                 all_raw.extend(_extract_contacts_from_folder(mail, folder, name_clean))
 
             # Deduplicate contacts by email address (case-insensitive)
-            seen_emails: Set[str] = set()
-            unique_contacts: List[Tuple[str, str]] = []
+            seen_emails: set[str] = set()
+            unique_contacts: list[tuple[str, str]] = []
 
             for display_name, addr in all_raw:
                 addr_lower = addr.lower()

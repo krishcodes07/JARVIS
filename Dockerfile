@@ -1,7 +1,7 @@
 # ══════════════════════════════════════════════════════════════
 #  JARVIS — Dockerfile
 # ══════════════════════════════════════════════════════════════
-FROM python:3.14-slim AS base
+FROM python:3.11.4-slim AS base
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -25,7 +25,7 @@ RUN pip install --upgrade pip && \
 # ── Production stage ──
 FROM base AS production
 
-COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY . .

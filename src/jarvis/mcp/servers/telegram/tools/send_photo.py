@@ -4,7 +4,6 @@ Send photo tool for Telegram MCP Server.
 
 import json
 import urllib.request
-from typing import Optional
 
 from ..config import get_credentials
 
@@ -12,7 +11,7 @@ NAME = "send_photo"
 DESCRIPTION = "Send a photo or image URL to a Telegram chat ID with an optional caption."
 
 
-def send_photo(chat_id: str, photo_url: str, caption: Optional[str] = "") -> str:
+def send_photo(chat_id: str, photo_url: str, caption: str | None = "") -> str:
     """
     Send a photo URL to a Telegram chat.
 

@@ -29,5 +29,5 @@ def delete_event(event_id: str) -> str:
 
         save_events(remaining)
         return f"[OK] Deleted event with ID '{event_id}'."
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return f"Error: Failed to delete event: {e}"

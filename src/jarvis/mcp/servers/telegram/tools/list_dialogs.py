@@ -3,7 +3,6 @@ List dialogs tool for Telegram User Account (MTProto).
 Lists recent personal chats, DMs, groups, and channels with optional filtering by type.
 """
 
-from typing import Optional
 from ..client import get_telegram_client, run_async
 
 NAME = "list_dialogs"

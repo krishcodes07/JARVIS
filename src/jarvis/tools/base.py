@@ -32,6 +32,8 @@ class ToolSchema(BaseModel):
     description: str
     category: str = "basic"
     parameters: list[ToolParameter] = Field(default_factory=list)
+    aliases: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
     dangerous: bool = False  # Requires user confirmation if auto_approve is False
 
     def to_json_schema(self) -> dict[str, Any]:

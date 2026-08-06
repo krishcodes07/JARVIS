@@ -1,6 +1,6 @@
-from jarvis.ui.tui.widgets.prompt_box import PromptBoxWidget
+from jarvis.ui.tui.commands import SlashCommand, filter_commands
 from jarvis.ui.tui.widgets.command_popover import CommandPopoverWidget
-from jarvis.ui.tui.commands import filter_commands, SlashCommand
+from jarvis.ui.tui.widgets.prompt_box import PromptBoxWidget
 
 
 def test_prompt_box_mic_button_hollow_circle():
@@ -83,8 +83,8 @@ def test_modal_dialog_search_input_has_visible_height():
 
 
 def test_mcp_manager_available_servers_includes_registry_servers():
-    from jarvis.mcp.manager import MCPManager
     from jarvis.core.config import JarvisConfig
+    from jarvis.mcp.manager import MCPManager
 
     config = JarvisConfig()
     mgr = MCPManager(config)
@@ -97,8 +97,8 @@ def test_mcp_manager_available_servers_includes_registry_servers():
     assert "vercel" in server_names
 
 def test_unregister_server_removes_tools_from_platform_registry():
-    from jarvis.mcp.platform.registry import platform_registry
     from jarvis.mcp.platform.models import RegisteredTool
+    from jarvis.mcp.platform.registry import platform_registry
 
     dummy_tool = RegisteredTool(
         name="test_tool",

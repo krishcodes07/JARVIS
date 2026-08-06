@@ -1,8 +1,9 @@
 """Tests for GetToolsTool and BaseTool category property."""
 
 import pytest
-from jarvis.tools.basic.get_tools import GetToolsTool
+
 from jarvis.tools.base import BaseTool, ToolSchema
+from jarvis.tools.basic.get_tools import GetToolsTool
 
 
 class DummyTool(BaseTool):

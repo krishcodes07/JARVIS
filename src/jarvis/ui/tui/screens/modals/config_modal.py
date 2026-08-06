@@ -5,6 +5,7 @@ Config Modal Screen — Interactive dialog displaying active JARVIS settings (/c
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
 from rich.text import Text
 from textual.screen import ModalScreen
 from textual.widgets import OptionList

@@ -70,7 +70,7 @@ class MCPManager:
         for server_config in server_configs:
             manifest = self._manifests.get(server_config.name)
             if manifest and manifest.required_env_vars:
-                ok, missing = PlatformHooksManager.check_environment(manifest, os.environ)
+                ok, missing = PlatformHooksManager.check_environment(manifest, dict(os.environ))
                 if not ok:
                     logger.warning(
                         "Skipping MCP server '%s': missing env vars %s",

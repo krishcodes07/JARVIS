@@ -13,11 +13,10 @@ from typing import TYPE_CHECKING, ClassVar
 from textual import events, on, work
 from textual.binding import Binding, BindingType
 from textual.screen import Screen
-from textual.widgets import Button, Input, Static, TextArea
+from textual.widgets import Button, Input, TextArea
 from textual.worker import get_current_worker
 
 from jarvis.core.config import DATA_DIR
-from jarvis.ui.tui.commands import SlashCommand
 from jarvis.ui.tui.screens.modals import (
     ConfigModal,
     DebugModal,

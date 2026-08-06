@@ -2,22 +2,22 @@
 JARVIS TUI Custom Widgets Package.
 """
 
-from jarvis.ui.tui.widgets.header import HeaderWidget
-from jarvis.ui.tui.widgets.chat_view import ChatViewWidget, MessageWidget, AssistantFooterWidget
-from jarvis.ui.tui.widgets.prompt_box import PromptBoxWidget, PromptInputTextArea
+from jarvis.ui.tui.widgets.chat_view import AssistantFooterWidget, ChatViewWidget, MessageWidget
 from jarvis.ui.tui.widgets.command_popover import CommandPopoverWidget
-from jarvis.ui.tui.widgets.status_bar import TipBarWidget, StatusBarWidget
+from jarvis.ui.tui.widgets.header import HeaderWidget
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
+from jarvis.ui.tui.widgets.prompt_box import PromptBoxWidget, PromptInputTextArea
+from jarvis.ui.tui.widgets.status_bar import StatusBarWidget, TipBarWidget
 
 __all__ = [
-    "HeaderWidget",
-    "ChatViewWidget",
-    "MessageWidget",
     "AssistantFooterWidget",
+    "ChatViewWidget",
+    "CommandPopoverWidget",
+    "HeaderWidget",
+    "MessageWidget",
+    "ModalDialog",
     "PromptBoxWidget",
     "PromptInputTextArea",
-    "CommandPopoverWidget",
-    "TipBarWidget",
     "StatusBarWidget",
-    "ModalDialog",
+    "TipBarWidget",
 ]

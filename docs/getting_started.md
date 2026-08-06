@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- **Python 3.14+**
-- An API key for at least one supported LLM provider (Groq, OpenAI, Anthropic, Google Gemini, NVIDIA NIM, OpenRouter, OpenCode Zen, etc.)
+- **Python 3.11.4+**
+- An API key for at least one supported LLM provider (Groq, OpenAI, Anthropic, Google Gemini, NVIDIA NIM, OpenRouter, OpenCode Zen, TokenRouter, etc.)
 
 > [!IMPORTANT]
 > **Interface Status**: Currently, **only the Terminal UI (`tui`)** is active and under active development. The Web UI (`web`) and Desktop GUI (`gui`) options are in early development and not functional yet.
@@ -30,7 +30,7 @@ python scripts/setup.py
 git clone https://github.com/krishcodes07/JARVIS.git
 cd JARVIS
 
-# Create and activate a Python 3.14 virtual environment
+# Create and activate a Python 3.11.4 virtual environment
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate    # Linux/Mac

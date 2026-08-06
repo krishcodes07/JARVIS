@@ -9,7 +9,7 @@ import platform
 import sys
 from typing import Any
 
-from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
+from jarvis.tools.base import BaseTool, ToolSchema
 
 logger = logging.getLogger(__name__)
 

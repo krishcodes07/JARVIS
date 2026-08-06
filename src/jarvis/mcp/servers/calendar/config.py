@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, List
+from typing import Any
 
 STORE_PATH = os.environ.get("CALENDAR_STORE_PATH", "").strip() or "data/mcp_calendar.json"
 
@@ -41,6 +41,6 @@ def save_events(events: list[dict[str, Any]]) -> None:
         json.dump(events, f, indent=2, ensure_ascii=False)
 
 
-def validate() -> List[str]:
+def validate() -> list[str]:
     """Validate calendar configuration."""
     return []

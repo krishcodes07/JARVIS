@@ -5,7 +5,9 @@ Allows sending and reading messages from your personal Telegram user account.
 
 import asyncio
 import os
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from typing import Any
+
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 

@@ -3,8 +3,6 @@ Configuration for Terminal MCP server.
 """
 
 import os
-import sys
-from typing import List
 
 # Default working directory for terminal commands
 DEFAULT_CWD = os.environ.get("TERMINAL_DEFAULT_CWD", os.getcwd())
@@ -22,6 +20,6 @@ def resolve_cwd(cwd: str | None = None) -> str:
     return os.path.realpath(os.path.join(os.getcwd(), expanded))
 
 
-def validate() -> List[str]:
+def validate() -> list[str]:
     """Validate terminal configuration."""
     return []

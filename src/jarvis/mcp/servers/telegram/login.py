@@ -8,9 +8,10 @@ Run this script once in your terminal to log into your personal Telegram account
 import asyncio
 import os
 import sys
+
+from dotenv import load_dotenv
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from dotenv import load_dotenv
 
 # Load env variables
 load_dotenv()

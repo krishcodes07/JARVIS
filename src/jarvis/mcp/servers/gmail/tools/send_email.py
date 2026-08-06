@@ -2,10 +2,9 @@
 Send email tool for Gmail.
 """
 
-import email
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import smtplib
 
 from ..config import get_credentials
 

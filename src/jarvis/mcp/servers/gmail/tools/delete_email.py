@@ -3,9 +3,7 @@ Delete email tool for Gmail.
 Moves matching emails to Gmail Trash.
 """
 
-import email
 import imaplib
-from typing import Optional
 
 from ..config import get_credentials
 

@@ -2,11 +2,9 @@
 Config template for creating new MCP servers.
 """
 
-import os
-from typing import List
 
 
-def validate() -> List[str]:
+def validate() -> list[str]:
     """Validate server environment variables and options."""
     errors = []
     # Add validation checks here if required:

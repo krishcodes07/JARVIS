@@ -3,7 +3,6 @@ Read messages tool for Telegram User Account (MTProto).
 Reads recent messages from any personal chat, channel, or group.
 """
 
-from typing import Optional
 from ..client import get_telegram_client, run_async
 
 NAME = "read_messages"

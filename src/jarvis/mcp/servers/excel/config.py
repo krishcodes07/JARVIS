@@ -3,7 +3,6 @@ Configuration and safety checks for Excel MCP server.
 """
 
 import os
-from typing import List
 
 WORK_DIR = os.environ.get("EXCEL_WORK_DIR", "").strip()
 
@@ -23,7 +22,7 @@ def safe_excel_path(filename: str) -> str:
     return resolved
 
 
-def validate() -> List[str]:
+def validate() -> list[str]:
     errors = []
     if WORK_DIR and WORK_DIR not in ("*", "ALL", ""):
         if not os.path.exists(WORK_DIR):

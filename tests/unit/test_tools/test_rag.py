@@ -1,6 +1,7 @@
 """Unit tests for Tool RAG functionality."""
 
 import pytest
+
 from jarvis.providers.base import ToolDefinition
 from jarvis.tools.rag import ToolRetriever
 

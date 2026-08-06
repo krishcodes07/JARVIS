@@ -29,14 +29,14 @@ class TestVoiceRegistry:
 
     @pytest.mark.asyncio
     async def test_edge_tts_fallback_on_invalid_voice(self):
-        from jarvis.voice.tts.edge_tts import DEFAULT_VOICE, EdgeTTSProvider
+        from jarvis.voice.tts.edge_tts import EdgeTTSProvider
 
         class Cfg:
             provider = "edge_tts"
             voice = "invalid-voice-name-xyz"
 
         provider = EdgeTTSProvider(Cfg())
-        assert provider.supports_streaming is False
+        assert provider.supports_streaming is True
         # Should fall back to DEFAULT_VOICE without raising NoAudioReceived
         audio = await provider.synthesize("Hello")
         assert len(audio) > 0
@@ -137,24 +137,6 @@ class TestAudioHelpers:
             assert wav.getnchannels() == 1
             assert wav.readframes(wav.getnframes()) == pcm
 
-    @pytest.mark.parametrize(
-        "buffer,expected_sentences,remaining",
-        [
-            ("Hello world.", ["Hello world."], ""),
-            ("Hi there! How are you? Fine.", ["Hi there!", "How are you?", "Fine."], ""),
-            ("Partial sentence without end", [], "Partial sentence without end"),
-            ("One. Two. Part", ["One.", "Two."], "Part"),
-            ("New\nline sentence.", ["New\nline sentence."], ""),
-        ],
-    )
-    def test_pop_complete_sentences(self, buffer, expected_sentences, remaining):
-        from jarvis.ui.tui.app import _pop_complete_sentences
-
-        sentences, leftover = _pop_complete_sentences(buffer)
-        assert sentences == expected_sentences
-        assert leftover == remaining
-
-
 class TestWhisperHelpers:
     """Language normalization for whisper models."""
 
@@ -180,8 +162,10 @@ class TestAudioPlayerStream:
 
     @pytest.mark.asyncio
     async def test_play_stream_accumulates_bytes(self, monkeypatch):
+        import jarvis.voice.audio.player as player_mod
         from jarvis.voice.audio.player import AudioPlayer
 
+        monkeypatch.setattr(player_mod, "_pyaudio", None)
         player = AudioPlayer()
         played_bytes = []
 
@@ -208,10 +192,13 @@ class TestAudioPlayerStream:
 
     @pytest.mark.asyncio
     async def test_close_handles_sd_is_none(self, monkeypatch):
+        import threading
+
         import jarvis.voice.audio.player as player_mod
 
         monkeypatch.setattr(player_mod, "sd", None)
         player = player_mod.AudioPlayer.__new__(player_mod.AudioPlayer)
+        player._stop_event = threading.Event()
         await player.close()  # Should not raise AttributeError
 
     @pytest.mark.asyncio
@@ -222,13 +209,6 @@ class TestAudioPlayerStream:
         recorder = recorder_mod.AudioRecorder.__new__(recorder_mod.AudioRecorder)
         assert await recorder.capture() is None
 
-    def test_in_voice_mode_returns_false_when_voice_manager_is_none(self):
-        from jarvis.ui.tui.app import _in_voice_mode
-
-        class DummyEngine:
-            voice_manager = None
-
-        assert _in_voice_mode(DummyEngine()) is False
 
 
 

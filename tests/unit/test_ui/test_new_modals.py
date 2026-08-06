@@ -4,7 +4,6 @@ Unit tests for new TUI modals and VoiceSessionController.
 
 from __future__ import annotations
 
-import pytest
 from jarvis.ui.tui.screens.modals import ConfigModal, ConfirmModal, DebugModal
 from jarvis.ui.tui.voice_controller import VoiceSessionController
 
@@ -37,7 +36,7 @@ def test_voice_controller_status_when_disconnected():
 
 
 def test_app_import():
-    from jarvis.ui.tui.app import JarvisTUIApp, run_tui
+    from jarvis.ui.tui.app import JarvisTUIApp
     app = JarvisTUIApp(engine=None)
     assert app.TITLE == "JARVIS AI Assistant"
 

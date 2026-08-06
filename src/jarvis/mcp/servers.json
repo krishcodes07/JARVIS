@@ -50,16 +50,7 @@
       "description": "Terminal integration — run commands and inspect the system",
       "enabled": true
     },
-    "filesystem": {
-      "command": "python",
-      "args": [
-        "-m",
-        "jarvis.mcp.servers.filesystem.server"
-      ],
-      "transport": "stdio",
-      "description": "Filesystem integration — read, write, and manage files",
-      "enabled": true
-    },
+
     "firecrawl-mcp": {
       "command": "npx",
       "args": [

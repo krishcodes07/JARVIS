@@ -1,11 +1,13 @@
 import asyncio
 import os
 import sys
+
 import httpx
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
 
 from dotenv import load_dotenv
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
 
 async def main():
@@ -19,15 +21,15 @@ async def main():
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
-    
+
     model = "nvidia/nv-embedcode-7b-v1"
-    
+
     # Test 1: Standard OpenAI payload
     payload1 = {
         "input": ["def hello(): print('world')"],
         "model": model,
     }
-    
+
     print("Test 1: Standard OpenAI payload...")
     async with httpx.AsyncClient() as client:
         res1 = await client.post(url, headers=headers, json=payload1)
@@ -40,7 +42,7 @@ async def main():
         "model": model,
         "input_type": "passage",
     }
-    
+
     print("\nTest 2: Payload with input_type='passage'...")
     async with httpx.AsyncClient() as client:
         res2 = await client.post(url, headers=headers, json=payload2)

@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from ..config import load_events, save_events
 
@@ -30,8 +29,8 @@ def create_event(
     title: str,
     start: str,
     end: str,
-    description: Optional[str] = None,
-    location: Optional[str] = None,
+    description: str | None = None,
+    location: str | None = None,
 ) -> str:
     """
     Create a new calendar event.
@@ -68,5 +67,5 @@ def create_event(
             f"[OK] Created event '{title}' (ID: {event['id']}) "
             f"from {event['start']} to {event['end']}."
         )
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return f"Error: Failed to create event: {e}"

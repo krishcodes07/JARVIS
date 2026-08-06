@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from jarvis.core.config import PROJECT_ROOT
-from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
+from jarvis.tools.base import BaseTool, ToolSchema
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class GetMCPsTool(BaseTool):
             return "No MCP servers configuration file found."
 
         try:
-            with open(servers_config_file, "r", encoding="utf-8") as f:
+            with open(servers_config_file, encoding="utf-8") as f:
                 data = json.load(f)
 
             servers = data.get("servers", {})

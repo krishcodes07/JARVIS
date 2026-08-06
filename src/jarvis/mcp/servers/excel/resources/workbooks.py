@@ -4,6 +4,7 @@ Exposes excel://workbooks
 """
 
 import os
+
 from ..config import WORK_DIR
 
 URI = "excel://workbooks"

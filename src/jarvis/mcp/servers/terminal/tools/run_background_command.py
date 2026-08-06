@@ -6,7 +6,7 @@ Launches a long-running subprocess or GUI app silently in the background without
 import os
 import subprocess
 import sys
-from typing import Optional
+
 from ..config import resolve_cwd
 
 NAME = "run_background_command"
@@ -18,7 +18,7 @@ DESCRIPTION = (
 
 def run_background_command(
     command: str,
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
 ) -> str:
     """
     Launch a command silently in the background without creating a console/terminal window.

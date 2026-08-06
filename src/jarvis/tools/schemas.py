@@ -4,9 +4,7 @@ Tool Schemas — Shared schema utilities for tool definitions.
 
 from __future__ import annotations
 
-from typing import Any
-
-from jarvis.tools.base import ToolParameter, ToolSchema
+from jarvis.tools.base import ToolParameter
 
 
 def string_param(name: str, description: str, required: bool = True) -> ToolParameter:

@@ -2,9 +2,10 @@
 Create workbook tool for Excel.
 """
 
-from operator import imod
 import os
+
 import openpyxl
+
 from ..config import safe_excel_path
 
 NAME = "create_workbook"

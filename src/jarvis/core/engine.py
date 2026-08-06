@@ -122,7 +122,10 @@ class JarvisEngine:
 
         session_id = self.session.session_id
 
-        # 2. Build system prompt & context
+        # 2. Gather tool definitions & capability summary
+        tool_defs, capability_summary = await self._get_tool_definitions(query=message)
+
+        # 3. Build system prompt & context
         persona = get_persona(self.config.jarvis.persona)
 
         memory_ctx = ""
@@ -133,10 +136,8 @@ class JarvisEngine:
         system_prompt = self.prompt_builder.build(
             persona=persona,
             memory_context=memory_ctx,
+            capability_summary=capability_summary,
         )
-
-        # 3. Gather tool definitions
-        tool_defs = await self._get_tool_definitions(query=message)
 
         # 4. Save user message to memory
         if self.memory_manager:
@@ -253,6 +254,8 @@ class JarvisEngine:
 
         session_id = self.session.session_id
 
+        tool_defs, capability_summary = await self._get_tool_definitions(query=message)
+
         persona = get_persona(self.config.jarvis.persona)
 
         memory_ctx = ""
@@ -263,6 +266,7 @@ class JarvisEngine:
         system_prompt = self.prompt_builder.build(
             persona=persona,
             memory_context=memory_ctx,
+            capability_summary=capability_summary,
         )
 
         messages: list[Message] = [Message(role="system", content=system_prompt)]
@@ -279,7 +283,6 @@ class JarvisEngine:
         if self.memory_manager:
             await self.memory_manager.add_message(session_id, "user", message)
 
-        tool_defs = await self._get_tool_definitions(query=message)
         on_tool_call = kwargs.get("on_tool_call")
         on_tool_result = kwargs.get("on_tool_result")
         approval_callback = kwargs.get("approval_callback")
@@ -404,7 +407,7 @@ class JarvisEngine:
         self.memory_manager = MemoryManager(config)
         if self.provider_manager:
             self.memory_manager.set_provider_source(
-                lambda: self.provider_manager.active_provider
+                lambda: self.provider_manager.active_provider if self.provider_manager else None
             )
             self.memory_manager.set_provider_manager(self.provider_manager)
         await self.memory_manager.initialize()
@@ -464,20 +467,38 @@ class JarvisEngine:
             self.tool_retriever = ToolRetriever(embedder=embedder)
             await self.tool_retriever.initialize()
 
-            all_tools = await self._get_tool_definitions(query=None)
+            all_tools = await self._get_all_raw_tool_definitions()
             if all_tools:
                 await self.tool_retriever.index_tools(all_tools)
         except Exception as e:
             logger.warning(f"Failed to initialize Tool RAG: {e}")
 
-    async def _get_tool_definitions(self, query: str | None = None) -> list[ToolDefinition]:
-        """Convert registered tools into provider ToolDefinition list.
+    def _get_capability_summary(self, all_tools: list[ToolDefinition]) -> str:
+        """Generate a concise capability summary of all available tools grouped by category."""
+        if not all_tools:
+            return ""
 
-        Combines built-in tools from the tool registry with MCP tools
-        (using their qualified ``server__tool`` names) when MCP is enabled.
-        If a query is provided and Tool RAG is enabled, dynamically selects
-        the top relevant tools.
-        """
+        categories: dict[str, list[str]] = {}
+        for tool in all_tools:
+            cat = (tool.category or "basic").title()
+            name_display = tool.name
+            if tool.aliases:
+                name_display += f" (aliases: {', '.join(tool.aliases[:3])})"
+            categories.setdefault(cat, []).append(name_display)
+
+        lines = [
+            "JARVIS has access to the following full tool categories & capabilities:",
+            "Use the `search_tools(query)` meta-tool to dynamically discover & load any specific tool schemas you need.\n"
+        ]
+        for cat, items in sorted(categories.items()):
+            sample = ", ".join(items[:6])
+            more = f" ... (+{len(items)-6} more)" if len(items) > 6 else ""
+            lines.append(f"- **{cat}**: {sample}{more}")
+
+        return "\n".join(lines)
+
+    async def _get_all_raw_tool_definitions(self) -> list[ToolDefinition]:
+        """Gather complete list of all registered built-in and MCP tool definitions."""
         tool_defs: list[ToolDefinition] = []
 
         if self.config and self.config.tools.enabled and self.tool_registry:
@@ -487,11 +508,26 @@ class JarvisEngine:
                         name=schema_dict["name"],
                         description=schema_dict["description"],
                         parameters=schema_dict["parameters"],
+                        aliases=schema_dict.get("aliases", []),
+                        category=schema_dict.get("category", "basic"),
+                        keywords=schema_dict.get("keywords", []),
                     )
                 )
 
         if self.mcp_manager and self.config and self.config.mcp.enabled:
             tool_defs.extend(self.mcp_manager.get_all_tool_definitions())
+
+        return tool_defs
+
+    async def _get_tool_definitions(self, query: str | None = None) -> tuple[list[ToolDefinition], str]:
+        """Convert registered tools into provider ToolDefinition list & capability summary.
+
+        Combines built-in tools from the tool registry with MCP tools.
+        If a query is provided and Tool RAG is enabled, dynamically selects
+        the top relevant tools while generating a high-level capability summary.
+        """
+        all_defs = await self._get_all_raw_tool_definitions()
+        capability_summary = self._get_capability_summary(all_defs)
 
         if (
             query
@@ -500,14 +536,19 @@ class JarvisEngine:
             and self.tool_retriever
         ):
             rag_cfg = self.config.tools.rag
-            return await self.tool_retriever.retrieve(
-                query=query,
-                all_tools=tool_defs,
-                top_k=rag_cfg.top_k,
-                always_include=rag_cfg.always_include,
-            )
+            always_inc = list(rag_cfg.always_include or [])
+            if "search_tools" not in always_inc:
+                always_inc.append("search_tools")
 
-        return tool_defs
+            selected_tools = await self.tool_retriever.retrieve(
+                query=query,
+                all_tools=all_defs,
+                top_k=rag_cfg.top_k,
+                always_include=always_inc,
+            )
+            return selected_tools, capability_summary
+
+        return all_defs, capability_summary
 
     async def _execute_tool(
         self,

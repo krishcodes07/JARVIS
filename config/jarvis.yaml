@@ -30,7 +30,7 @@ memory:
     enabled: true
     backend: chromadb
     embedding_provider: openrouter
-    embedding_model: nvidia/llama-nemotron-embed-vl-1b-v2:free
+    embedding_model: nvidia/nemotron-3-embed-1b:free
     chunk_size: 512
     chunk_overlap: 50
     collection_name: jarvis_memory
@@ -49,10 +49,17 @@ tools:
     blocked_commands: []
   rag:
     enabled: true
-    top_k: 5
+    top_k: 15
     always_include:
     - get_mcps
     - get_tools
+    - list_directory
+    - read_file
+    - write_file
+    - edit_file
+    - append_file
+    - make_directory
+    - delete_file
   categories:
     basic: true
     filesystem: true

@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from rich.text import Text
 from textual import events, on
+from textual.containers import Horizontal
 from textual.message import Message
 from textual.widget import Widget
-from textual.containers import Horizontal
-from textual.widgets import Button, Static, TextArea
+from textual.widgets import Static, TextArea
 
 
 class PromptInputTextArea(TextArea):

@@ -7,9 +7,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from jarvis.core.engine import JarvisEngine
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +21,19 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 # Track background tasks so they aren't garbage-collected mid-flight.
 _background_tasks: set[asyncio.Task] = set()
+
+_engine: JarvisEngine | None = None
+
+
+def set_engine(engine: JarvisEngine | None) -> None:
+    """Set the active JarvisEngine instance for this router module."""
+    global _engine
+    _engine = engine
+
+
+def _get_engine() -> JarvisEngine | None:
+    """Get the active JarvisEngine instance."""
+    return _engine
 
 
 class ChatRequest(BaseModel):
@@ -34,8 +51,7 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest) -> ChatResponse:
     """REST endpoint for sending a message to JARVIS."""
-    # Use global or shared engine instance
-    engine = getattr(router, "engine", None)
+    engine = _get_engine()
     if not engine or not engine._initialized:
         raise RuntimeError("JARVIS Engine is not initialized.")
 
@@ -49,7 +65,7 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
 async def websocket_chat_endpoint(websocket: WebSocket) -> None:
     """WebSocket endpoint for real-time streaming & tool call notifications."""
     await websocket.accept()
-    engine = getattr(router, "engine", None)
+    engine = _get_engine()
 
     if not engine or not engine._initialized:
         await websocket.send_json({"type": "error", "message": "JARVIS Engine not initialized."})
@@ -81,7 +97,9 @@ async def websocket_chat_endpoint(websocket: WebSocket) -> None:
             # Dangerous tools are denied unless auto_approve is enabled.
             # (The web UI has no interactive approval flow yet.)
             async def approval_callback(tool_name: str, tool_args: dict) -> bool:
-                return bool(engine.config.tools.auto_approve)
+                if engine and engine.config and engine.config.tools:
+                    return bool(engine.config.tools.auto_approve)
+                return False
 
             # Signal response start
             await websocket.send_json({"type": "start"})

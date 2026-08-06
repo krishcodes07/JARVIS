@@ -3,7 +3,7 @@ Delete message tool for Telegram User Account (MTProto).
 Allows deleting one or multiple messages in a chat by message ID(s).
 """
 
-from typing import Union, List
+
 from ..client import get_telegram_client, run_async
 
 NAME = "delete_message"
@@ -13,7 +13,7 @@ DESCRIPTION = (
 )
 
 
-async def _delete_user_message(chat_id: str, message_ids: Union[int, str, List[int]], revoke: bool = True) -> str:
+async def _delete_user_message(chat_id: str, message_ids: int | str | list[int], revoke: bool = True) -> str:
     """Async helper to delete message(s) via Telethon."""
     client = get_telegram_client()
     await client.connect()
@@ -48,7 +48,7 @@ async def _delete_user_message(chat_id: str, message_ids: Union[int, str, List[i
         return f"Error: Failed to delete message(s) from '{chat_id}': {e}"
 
 
-def delete_message(chat_id: str, message_ids: Union[int, str], revoke: bool = True) -> str:
+def delete_message(chat_id: str, message_ids: int | str, revoke: bool = True) -> str:
     """
     Delete message(s) from a Telegram chat.
 

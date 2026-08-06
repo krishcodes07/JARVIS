@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from jarvis.core.config import PROJECT_ROOT
@@ -55,7 +54,7 @@ class LongTermStore(BaseMemory):
             key: Unique memory key.
             data: Memory data dict with 'content', 'category', etc.
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         if key in self._memories:
             self._memories[key].update(data)
             self._memories[key]["updated_at"] = now

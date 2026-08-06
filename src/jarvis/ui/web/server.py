@@ -53,10 +53,12 @@ async def run_web(config: JarvisConfig) -> None:
         allow_headers=["*"],
     )
 
-    # Pass engine instance to routers
-    chat.router.engine = engine
-    config_router.router.engine = engine
-    tools_router.router.engine = engine
+    app.state.engine = engine
+
+    # Pass engine instance to route modules
+    chat.set_engine(engine)
+    config_router.set_engine(engine)
+    tools_router.set_engine(engine)
 
     # Include API routers
     app.include_router(chat.router)
@@ -75,14 +77,14 @@ async def run_web(config: JarvisConfig) -> None:
     templates = Jinja2Templates(directory=str(templates_dir)) if templates_dir.exists() else None
 
     @app.get("/", response_class=HTMLResponse)
-    async def index(request: Request):
+    async def index(request: Request) -> HTMLResponse:
         """Serve main web page."""
         index_file = frontend_dir / "index.html"
         if index_file.exists():
-            return index_file.read_text(encoding="utf-8")
+            return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
         if templates and (templates_dir / "base.html").exists():
-            return templates.TemplateResponse("base.html", {"request": request})
-        return "<h1>JARVIS Web UI</h1><p>Frontend static files missing.</p>"
+            return templates.TemplateResponse(request=request, name="base.html")
+        return HTMLResponse(content="<h1>JARVIS Web UI</h1><p>Frontend static files missing.</p>")
 
     @app.get("/api/health")
     async def health():

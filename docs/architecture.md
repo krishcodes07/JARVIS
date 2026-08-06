@@ -31,7 +31,7 @@ JARVIS is built as a modular, production-grade AI assistant package with a clean
 ## Subsystems Detail
 
 - **Core Engine (`src/jarvis/core`)**: Manages the event bus, session state, application lifecycle, error handling, and configuration loading.
-- **Provider Manager (`src/jarvis/providers`)**: Handles API authentication, message streaming, token budgets, and fallback provider routing across OpenAI, Anthropic, Google, Groq, NVIDIA NIM, OpenRouter, Mistral, and OpenCode Zen protocols.
+- **Provider Manager (`src/jarvis/providers`)**: Handles API authentication, message streaming, token budgets, and fallback provider routing across OpenAI, Anthropic, Google, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode Zen, and TokenRouter protocols.
 - **Memory Manager (`src/jarvis/memory`)**:
   - **Conversation Memory**: Short-term session context with automatic summarization.
   - **Long-Term Memory**: Autonomous fact extraction and storage in JSON format.

@@ -91,7 +91,7 @@ class ToolCallWidget(Static):
         self.args_str = args_str
         self.result_text: str = ""
         self._expanded: bool = False
-        
+
         self.header_widget = Static(self._format_header(), classes="tool-header")
         self.output_widget = Static("", classes="tool-output-block")
 

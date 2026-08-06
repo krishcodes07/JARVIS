@@ -3,10 +3,9 @@ Configuration and credentials helper for Telegram MCP Server.
 """
 
 import os
-from typing import List, Tuple
 
 
-def get_credentials() -> Tuple[str, str, str]:
+def get_credentials() -> tuple[str, str, str]:
     """
     Get Telegram credentials from environment variables.
     Supports Telegram Bot API (TELEGRAM_BOT_TOKEN) or MTProto (TELEGRAM_API_ID, TELEGRAM_API_HASH).
@@ -17,7 +16,7 @@ def get_credentials() -> Tuple[str, str, str]:
     return bot_token, api_id, api_hash
 
 
-def validate() -> List[str]:
+def validate() -> list[str]:
     """Validate Telegram server configuration."""
     errors = []
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "")

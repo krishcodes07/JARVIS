@@ -19,7 +19,7 @@
 <p align="center"><b>The ultimate open-source AI assistant. Multi-provider, MCP-powered, voice-enabled.</b></p>
 
 <p align="center">
-  <a href="https://www.python.org/downloads/"><img alt="Python 3.14+" src="https://img.shields.io/badge/python-3.14%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" /></a>
+  <a href="https://www.python.org/downloads/"><img alt="Python 3.11.4+" src="https://img.shields.io/badge/python-3.11.4%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" /></a>
   <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" /></a>
   <a href="https://textual.textualize.io"><img alt="Textual TUI" src="https://img.shields.io/badge/TUI-Textual-blueviolet?style=for-the-badge" /></a>
   <a href="https://modelcontextprotocol.io"><img alt="MCP Supported" src="https://img.shields.io/badge/MCP-1.0-purple?style=for-the-badge" /></a>
@@ -37,9 +37,9 @@
 
 ## Why J.A.R.V.I.S.?
 
-Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 8+ LLM providers directly, interact via rich terminal TUI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
+Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 9+ LLM providers directly, interact via rich terminal TUI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
 
-- **Zero-Middleman Provider Routing** — Connect directly to APIs (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode Zen) with automatic failover fallback routing.
+- **Zero-Middleman Provider Routing** — Connect directly to APIs (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode Zen, TokenRouter) with automatic failover fallback routing.
 - **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, and voice toggle.
 - **Native MCP Ecosystem & Creation** — Seamlessly integrate Gmail, Calendar, Excel, Telegram, Filesystem, Terminal, Firecrawl, and Vercel — or let JARVIS generate custom MCP servers dynamically.
 - **Integrated Voice Suite** — Natural speech-to-text (STT) input and real-time streaming text-to-speech (TTS) output with hands-free conversation mode.
@@ -50,7 +50,7 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 
 | Component | Interface / Subsystem | Status | Technical Stack |
 | --- | --- | --- | --- |
-| **Terminal UI (TUI)** | Rich TUI Application | 🟢 **Active (In Dev)** | Python 3.14, Textual, Rich Markdown |
+| **Terminal UI (TUI)** | Rich TUI Application | 🟢 **Active (In Dev)** | Python 3.11.4, Textual, Rich Markdown |
 | **Web UI** | Web Dashboard | 🟡 *In Development (Non-functional)* | FastAPI, Uvicorn, WebSockets, Jinja2 |
 | **Desktop GUI** | Desktop Window | 🟡 *In Development (Non-functional)* | CustomTkinter, Asyncio integration |
 | **Core Engine** | Orchestration & Events | 🟢 **Active** | Asyncio Event Bus, Pydantic v2 Config |
@@ -63,7 +63,7 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 ## Features
 
 - **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, and voice controls. (Web UI & Desktop GUI coming soon).
-- **8+ LLM Provider Backends** — Native protocol support for OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral AI, and OpenCode Zen, complete with automatic fallback routing upon API rate limits or failures.
+- **9+ LLM Provider Backends** — Native protocol support for OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral AI, OpenCode Zen, and TokenRouter, complete with automatic fallback routing upon API rate limits or failures.
 - **Multi-Tiered Memory & RAG** — Conversation history with automatic summarization, autonomous long-term fact extraction, and vector semantic search powered by ChromaDB.
 - **Built-in Tools & Security Sandbox** — Calculator, clipboard manager, date/time utility, screenshot generator, web URL reader, process manager, and shell command runner operating inside a configurable security sandbox.
 - **Native MCP Integration** — Direct integration with stdio and npx Model Context Protocol servers (Gmail, Calendar, Excel, Telegram, Terminal, Filesystem, Firecrawl, Vercel).
@@ -161,6 +161,7 @@ python scripts/dev.py
 | **OpenRouter** | `openai` | `anthropic/claude-sonnet-4` | ✅ | ✅ | ✅ | `OPENROUTER_API_KEY` |
 | **Mistral AI** | `openai` | `mistral-large-latest` | ✅ | ✅ | ✅ | `MISTRAL_API_KEY` |
 | **OpenCode Zen** | `openai` | `deepseek-v4-flash-free` | ❌ | ✅ | ✅ | `OPENCODE_ZEN_API_KEY` |
+| **TokenRouter** | `openai` | `moonshotai/kimi-k3-free` | ❌ | ✅ | ✅ | `TOKENROUTER_API_KEY` |
 
 > [!TIP]
 > To add a new OpenAI-compatible provider, simply add an entry to `config/providers.json` — zero code changes required!
@@ -172,6 +173,7 @@ python scripts/dev.py
 JARVIS includes out-of-the-box tools categorized by safety levels:
 
 - **Basic Tools**: `calculator`, `clipboard`, `datetime_tool`, `screenshot`, `url_reader`
+- **Filesystem Tools**: `read_file`, `write_file`, `edit_file`, `append_file`, `list_directory`, `make_directory`, `delete_file`, `copy_file`, `move_file`, `search_files`, `grep_search`, `get_file_info`
 - **System Tools**: `process_manager`, `run_command`, `system_info`
 
 ### Permissions & Sandboxing
@@ -201,7 +203,6 @@ JARVIS features native Model Context Protocol support out-of-the-box:
 | 📊 **Excel** | `stdio` | Read, edit, format, and analyze `.xlsx` spreadsheets | Built-in |
 | 💬 **Telegram** | `stdio` | Send and receive Telegram chat messages | Built-in |
 | 🖥️ **Terminal** | `stdio` | Inspect system processes and run shell commands | Built-in |
-| 📁 **Filesystem** | `stdio` | Extended filesystem reading, writing, and search | Built-in |
 | 🔍 **Firecrawl** | `stdio (npx)` | Real-time web scraping, crawling, and search | External |
 | 🚀 **Vercel** | `stdio (npx)` | Manage deployments, domains, and analytics | External |
 

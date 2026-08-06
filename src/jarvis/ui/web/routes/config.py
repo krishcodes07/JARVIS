@@ -5,14 +5,30 @@ Web UI Config Routes — API endpoints for managing settings, providers, and mod
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+if TYPE_CHECKING:
+    from jarvis.core.engine import JarvisEngine
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/config", tags=["config"])
+
+_engine: JarvisEngine | None = None
+
+
+def set_engine(engine: JarvisEngine | None) -> None:
+    """Set the active JarvisEngine instance for this router module."""
+    global _engine
+    _engine = engine
+
+
+def _get_engine() -> JarvisEngine | None:
+    """Get the active JarvisEngine instance."""
+    return _engine
 
 
 class ProviderSwitchRequest(BaseModel):
@@ -23,7 +39,7 @@ class ProviderSwitchRequest(BaseModel):
 @router.get("/")
 async def get_config() -> dict[str, Any]:
     """Get current configuration."""
-    engine = getattr(router, "engine", None)
+    engine = _get_engine()
     if not engine or not engine.config:
         raise HTTPException(status_code=500, detail="Engine config not loaded.")
 
@@ -40,7 +56,7 @@ async def get_config() -> dict[str, Any]:
 @router.get("/providers")
 async def list_providers() -> list[dict[str, Any]]:
     """List all available providers from providers.json."""
-    engine = getattr(router, "engine", None)
+    engine = _get_engine()
     if not engine or not engine.provider_manager:
         raise HTTPException(status_code=500, detail="Provider manager unavailable.")
 
@@ -60,17 +76,18 @@ async def list_providers() -> list[dict[str, Any]]:
 @router.get("/models")
 async def list_models(provider: str | None = None) -> list[dict[str, Any]]:
     """Fetch live models for a provider dynamically from its API endpoint."""
-    engine = getattr(router, "engine", None)
+    engine = _get_engine()
     if not engine or not engine.provider_manager:
         raise HTTPException(status_code=500, detail="Provider manager unavailable.")
 
-    return await engine.provider_manager.get_models(provider)
+    models: list[dict[str, Any]] = await engine.provider_manager.get_models(provider)
+    return models
 
 
 @router.post("/provider")
 async def switch_provider(request: ProviderSwitchRequest) -> dict[str, str]:
     """Switch active provider and model."""
-    engine = getattr(router, "engine", None)
+    engine = _get_engine()
     if not engine or not engine.provider_manager:
         raise HTTPException(status_code=500, detail="Provider manager unavailable.")
 

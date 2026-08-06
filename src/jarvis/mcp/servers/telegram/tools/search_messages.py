@@ -3,7 +3,7 @@ Search messages tool for Telegram User Account (MTProto).
 Searches for messages by keyword in a specific chat or globally across all chats.
 """
 
-from typing import Optional
+
 from ..client import get_telegram_client, run_async
 
 NAME = "search_messages"
@@ -13,7 +13,7 @@ DESCRIPTION = (
 )
 
 
-async def _search_user_messages(query: str, chat_id: Optional[str] = None, limit: int = 15) -> str:
+async def _search_user_messages(query: str, chat_id: str | None = None, limit: int = 15) -> str:
     """Async helper to search messages via Telethon."""
     client = get_telegram_client()
     await client.connect()
@@ -54,7 +54,7 @@ async def _search_user_messages(query: str, chat_id: Optional[str] = None, limit
         return f"Error: Failed to search Telegram messages: {e}"
 
 
-def search_messages(query: str, chat_id: Optional[str] = None, limit: int = 15) -> str:
+def search_messages(query: str, chat_id: str | None = None, limit: int = 15) -> str:
     """
     Search for messages containing text matching query.
 

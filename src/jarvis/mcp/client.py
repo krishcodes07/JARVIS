@@ -198,6 +198,7 @@ class MCPClient:
             RuntimeError: If the server is not connected.
         """
         conn = self._get_connection(server_name)
+        assert conn.session is not None
         try:
             result = await conn.session.call_tool(tool_name, arguments or {})
         except Exception as e:
@@ -225,6 +226,7 @@ class MCPClient:
             The resource content text.
         """
         conn = self._get_connection(server_name)
+        assert conn.session is not None
         try:
             result = await conn.session.read_resource(uri)
         except Exception as e:
@@ -253,6 +255,7 @@ class MCPClient:
             The rendered prompt text.
         """
         conn = self._get_connection(server_name)
+        assert conn.session is not None
         try:
             result = await conn.session.get_prompt(prompt_name, arguments or {})
         except Exception as e:

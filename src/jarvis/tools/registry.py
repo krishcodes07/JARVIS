@@ -109,6 +109,9 @@ class ToolRegistry:
             {
                 "name": tool.schema.name,
                 "description": tool.schema.description,
+                "category": getattr(tool.schema, "category", "basic"),
+                "aliases": getattr(tool.schema, "aliases", []),
+                "keywords": getattr(tool.schema, "keywords", []),
                 "parameters": tool.schema.to_json_schema(),
             }
             for tool in self._tools.values()

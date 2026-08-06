@@ -3,7 +3,7 @@ Send message tool for Telegram User Account (MTProto).
 Sends messages directly from your personal Telegram user account.
 """
 
-from typing import Optional
+
 from ..client import get_telegram_client, run_async
 
 NAME = "send_message"
@@ -13,7 +13,7 @@ DESCRIPTION = (
 )
 
 
-async def _send_user_message(recipient: str, text: str, reply_to_id: Optional[int] = None) -> str:
+async def _send_user_message(recipient: str, text: str, reply_to_id: int | None = None) -> str:
     """Async helper to send message via Telethon."""
     client = get_telegram_client()
     await client.connect()
@@ -37,7 +37,7 @@ async def _send_user_message(recipient: str, text: str, reply_to_id: Optional[in
         return f"Error: Failed to send Telegram message to '{recipient}': {e}"
 
 
-def send_message(recipient: str, text: str, reply_to_id: Optional[int] = None) -> str:
+def send_message(recipient: str, text: str, reply_to_id: int | None = None) -> str:
     """
     Send a message from your personal Telegram account.
 

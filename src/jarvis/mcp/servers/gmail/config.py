@@ -3,10 +3,9 @@ Configuration and environment validation for Gmail MCP server.
 """
 
 import os
-from typing import List, Tuple
 
 
-def get_credentials() -> Tuple[str, str]:
+def get_credentials() -> tuple[str, str]:
     """Get Gmail credentials from environment variables."""
     email_addr = os.environ.get("GMAIL_EMAIL", "")
     app_password = os.environ.get("GMAIL_APP_PASSWORD", "")
@@ -18,7 +17,7 @@ def get_credentials() -> Tuple[str, str]:
     return email_addr, app_password
 
 
-def validate() -> List[str]:
+def validate() -> list[str]:
     """Validate Gmail configuration."""
     errors = []
     if not os.environ.get("GMAIL_EMAIL"):

@@ -3,11 +3,9 @@ Reply email tool for Gmail.
 Replies to a specific email by sender or subject.
 """
 
-import email
+import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import imaplib
-import smtplib
 
 from ..config import get_credentials
 

@@ -4,8 +4,6 @@ List events tool for Calendar.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..config import load_events
 
 NAME = "list_events"
@@ -17,8 +15,8 @@ def _sort_key(event: dict) -> str:
 
 
 def list_events(
-    start: Optional[str] = None,
-    end: Optional[str] = None,
+    start: str | None = None,
+    end: str | None = None,
     limit: int = 20,
 ) -> str:
     """
@@ -53,5 +51,5 @@ def list_events(
                 f"• [{e['start']} → {e['end']}] {e['title']}{loc} (ID: {e['id']})"
             )
         return "\n".join(lines)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return f"Error: Failed to list events: {e}"

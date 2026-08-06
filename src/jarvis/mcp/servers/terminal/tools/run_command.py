@@ -7,7 +7,6 @@ import os
 import subprocess
 import sys
 import time
-from typing import Optional
 
 from ..config import DEFAULT_TIMEOUT, resolve_cwd
 
@@ -21,7 +20,7 @@ DESCRIPTION = (
 
 def run_command(
     command: str,
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     shell_type: str = "auto",
 ) -> str:

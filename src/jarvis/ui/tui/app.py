@@ -7,9 +7,9 @@ and real-time streaming LLM responses.
 """
 
 from __future__ import annotations
+
 import logging
 from typing import TYPE_CHECKING
-
 
 from textual.app import App
 

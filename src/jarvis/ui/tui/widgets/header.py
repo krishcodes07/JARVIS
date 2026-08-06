@@ -10,7 +10,6 @@ from rich.text import Text
 from textual.app import RenderResult
 from textual.widget import Widget
 
-
 JARVIS_ASCII_LOGO = r"""
      ▄▄▄   ▄▄▄▄   ▄▄▄▄▄▄▄   ▄▄▄▄  ▄▄▄▄ ▄▄▄▄▄  ▄▄▄▄▄▄▄
      ███ ▄██▀▀██▄ ███▀▀███▄ ▀███  ███▀  ███  █████▀▀▀

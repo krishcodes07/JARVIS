@@ -6,7 +6,6 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-
 # ─── Application ──────────────────────────────────────────────
 APP_NAME = "JARVIS"
 APP_VERSION = "0.1.0"

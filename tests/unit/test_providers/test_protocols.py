@@ -1,9 +1,7 @@
-import pytest
-from typing import AsyncIterator
-from jarvis.providers.base import BaseProvider, GenerationConfig, Message, StreamChunk
-from jarvis.providers.protocols.openai import OpenAIProvider
+from jarvis.providers.base import GenerationConfig, Message
 from jarvis.providers.protocols.anthropic import AnthropicProvider
 from jarvis.providers.protocols.google import GoogleProvider
+from jarvis.providers.protocols.openai import OpenAIProvider
 
 
 def test_provider_stream_type_compatibility():

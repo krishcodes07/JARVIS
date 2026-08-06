@@ -4,6 +4,7 @@ Retrieves your saved personal Telegram contacts list.
 """
 
 from telethon.tl.functions.contacts import GetContactsRequest
+
 from ..client import get_telegram_client, run_async
 
 NAME = "get_contacts"

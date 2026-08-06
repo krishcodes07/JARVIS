@@ -3,11 +3,10 @@ Draft email tool for Gmail.
 Creates or saves an email draft in Gmail without sending it immediately.
 """
 
-import email
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import imaplib
 import time
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 from ..config import get_credentials
 

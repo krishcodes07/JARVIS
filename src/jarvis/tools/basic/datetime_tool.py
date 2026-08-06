@@ -5,7 +5,7 @@ DateTime Tool — Date and time operations.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
@@ -40,5 +40,5 @@ class DateTimeTool(BaseTool):
 
     async def execute(self, **kwargs: Any) -> str:
         """Get current date/time."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         return now.strftime("%Y-%m-%d %H:%M:%S %Z")

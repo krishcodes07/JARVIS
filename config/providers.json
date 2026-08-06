@@ -24,7 +24,7 @@
       "protocol": "google",
       "base_url": "https://generativelanguage.googleapis.com/v1beta",
       "api_key_env": "GOOGLE_API_KEY",
-      "default_model": "gemini-2.5-flash",
+      "default_model": "gemini-3.5-flash",
       "supports": ["text", "streaming", "tools", "vision", "embeddings"]
     },
     {
@@ -52,11 +52,7 @@
       "base_url": "https://openrouter.ai/api/v1",
       "api_key_env": "OPENROUTER_API_KEY",
       "default_model": "anthropic/claude-sonnet-4",
-      "supports": ["text", "streaming", "tools", "vision"],
-      "extra_headers": {
-        "HTTP-Referer": "https://github.com/jarvis-ai",
-        "X-Title": "JARVIS"
-      }
+      "supports": ["text", "streaming", "tools", "vision"]
     },
     {
       "name": "mistral",
@@ -74,6 +70,19 @@
       "base_url": "https://opencode.ai/zen/v1",
       "api_key_env": "OPENCODE_ZEN_API_KEY",
       "default_model": "deepseek-v4-flash-free",
+      "supports": [
+        "text",
+        "streaming",
+        "tools"
+      ]
+    },
+    {
+      "name": "tokenrouter",
+      "display_name": "TokenRouter",
+      "protocol": "openai",
+      "base_url": "https://api.tokenrouter.com/v1",
+      "api_key_env": "TOKENROUTER_API_KEY",
+      "default_model": "moonshotai/kimi-k3-free",
       "supports": [
         "text",
         "streaming",

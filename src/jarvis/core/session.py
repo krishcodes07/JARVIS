@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -37,7 +37,7 @@ class Session:
     def __init__(self, engine: JarvisEngine, session_id: str | None = None) -> None:
         self.session_id: str = session_id or uuid.uuid4().hex[:12]
         self.engine = engine
-        self.created_at: datetime = datetime.now(timezone.utc)
+        self.created_at: datetime = datetime.now(UTC)
         self.metadata: dict[str, Any] = {}
         self._active: bool = True
 

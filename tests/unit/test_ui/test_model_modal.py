@@ -1,5 +1,5 @@
-from jarvis.ui.tui.screens.modals.model_modal import ModelModal
 from jarvis.core.engine import JarvisEngine
+from jarvis.ui.tui.screens.modals.model_modal import ModelModal
 
 
 def test_model_modal_safe_config_access():

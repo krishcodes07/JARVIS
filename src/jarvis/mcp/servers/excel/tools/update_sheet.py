@@ -3,7 +3,9 @@ Update Sheet Tool for Excel.
 """
 
 import os
+
 import openpyxl
+
 from ..config import safe_excel_path
 
 NAME = "update_sheet"

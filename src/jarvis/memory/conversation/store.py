@@ -9,8 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from jarvis.core.config import DATA_DIR
@@ -55,7 +54,7 @@ class ConversationStore(BaseMemory):
 
         message = {
             **data,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
         self._buffers[session_id].append(message)
 
