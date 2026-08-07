@@ -236,9 +236,23 @@ class VoiceConfig(BaseModel):
     """Voice subsystem settings (TTS / STT / audio)."""
     enabled: bool = True
     mode: str = "text"                         # text | voice (default mode)
+    auto_send_msg: bool = True                 # auto send transcribed message (true) or place in prompt box (false)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     stt: STTConfig = Field(default_factory=STTConfig)
     audio: VoiceAudioConfig = Field(default_factory=VoiceAudioConfig)
+
+    @field_validator("auto_send_msg", mode="before")
+    @classmethod
+    def parse_auto_send_msg(cls, v: Any) -> bool:
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            clean = v.strip().lower()
+            if clean in ("true", "1", "yes", "on"):
+                return True
+            if clean in ("false", "0", "no", "off", "flase"):
+                return False
+        return True
 
 
 class JarvisMetaConfig(BaseModel):
@@ -332,8 +346,9 @@ class JarvisConfig(BaseModel):
         providers_path = CONFIG_DIR / "providers.json"
         if providers_path.exists():
             with open(providers_path, encoding="utf-8") as f:
-                data = json.load(f)
-            return data.get("providers", [])
+                data: dict[str, Any] = json.load(f)
+            result: list[dict[str, Any]] = data.get("providers", [])
+            return result
         logger.warning("providers.json not found.")
         return []
 
@@ -346,7 +361,8 @@ class JarvisConfig(BaseModel):
         models_path = CONFIG_DIR / "models.json"
         if models_path.exists():
             with open(models_path, encoding="utf-8") as f:
-                data = json.load(f)
-            return data.get("models", {})
+                data: dict[str, Any] = json.load(f)
+            result: dict[str, list[dict[str, Any]]] = data.get("models", {})
+            return result
         logger.warning("models.json not found.")
         return {}

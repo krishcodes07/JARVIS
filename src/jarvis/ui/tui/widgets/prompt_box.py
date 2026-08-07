@@ -5,6 +5,8 @@ Clean design with proper proportions and visual clarity.
 
 from __future__ import annotations
 
+import contextlib
+
 from rich.text import Text
 from textual import events, on
 from textual.containers import Horizontal
@@ -37,6 +39,19 @@ class PromptInputTextArea(TextArea):
             event.prevent_default()
             event.stop()
             self.post_message(self.Submitted(self, self.text))
+        elif event.key == "backspace" and self.text == "":
+            # Clear pasted attachment if input field is empty
+            try:
+                box = self.screen.query_one("#prompt-card")
+                clear_fn = getattr(box, "clear_pasted_text", None)
+                if clear_fn and getattr(box, "_pasted_text", ""):
+                    clear_fn()
+                    event.prevent_default()
+                    event.stop()
+                    return
+            except Exception:
+                pass
+            await super()._on_key(event)
         else:
             await super()._on_key(event)
 
@@ -59,6 +74,34 @@ class PromptBoxWidget(Widget):
         min-height: 1;
         layout: horizontal;
         margin: 0 0 1 0;
+    }
+
+    #prefix-label {
+        display: none;
+        color: #ffffff;
+        height: auto;
+        width: auto;
+        margin: 0 1 0 0;
+        padding: 0;
+    }
+
+    #prefix-label.visible {
+        display: block;
+    }
+
+    #paste-badge {
+        display: none;
+        background: #f97316;
+        color: #ffffff;
+        text-style: bold;
+        padding: 0 1;
+        margin: 0 1 0 0;
+        height: auto;
+        width: auto;
+    }
+
+    #paste-badge.visible {
+        display: block;
     }
 
     #prompt-input-field {
@@ -147,7 +190,12 @@ class PromptBoxWidget(Widget):
         self.model = model
         self.provider = provider
         self.reasoning = reasoning
+        self._prefix_text: str = ""
+        self._pasted_text: str = ""
+        self._last_known_text: str = ""
         self._default_placeholder = 'Ask anything... "Fix broken tests"'
+        self.prefix_label = Static("", id="prefix-label")
+        self.paste_badge = Static("", id="paste-badge")
         self.input_field = PromptInputTextArea(
             placeholder=self._default_placeholder,
             show_line_numbers=False,
@@ -163,6 +211,8 @@ class PromptBoxWidget(Widget):
 
     def compose(self):
         with Horizontal(id="prompt-input-row"):
+            yield self.prefix_label
+            yield self.paste_badge
             yield self.input_field
             yield self.mic_button
         yield self.badge_widget
@@ -175,10 +225,71 @@ class PromptBoxWidget(Widget):
         target_h = max(1, min(8, wrapped_lines))
         self.input_field.styles.height = target_h
 
-    @on(TextArea.Changed, "#prompt-input-field")
-    def on_text_changed(self, event: TextArea.Changed) -> None:
+    def insert_text(self, text: str) -> None:
+        """Insert text into the prompt input field at the current cursor position."""
+        if not text:
+            return
+        self.input_field.insert(text)
+        self.input_field.focus()
+        self._last_known_text = self.input_field.text
         self.update_input_height()
 
+    def clear_pasted_text(self) -> None:
+        pasted_was_present = bool(self._pasted_text)
+        prefix = self._prefix_text
+        self._pasted_text = ""
+        self._prefix_text = ""
+        self._last_known_text = ""
+        self.input_field.placeholder = self._default_placeholder
+        if self.is_mounted:
+            self.paste_badge.remove_class("visible")
+            self.paste_badge.update("")
+            self.prefix_label.remove_class("visible")
+            self.prefix_label.update("")
+        if pasted_was_present and prefix:
+            self.input_field.load_text(prefix)
+            lines = prefix.split("\n")
+            last_row = max(0, len(lines) - 1)
+            last_col = len(lines[last_row]) if lines else 0
+            with contextlib.suppress(Exception):
+                self.input_field.move_cursor((last_row, last_col))
+            self.update_input_height()
+
+    @on(TextArea.Changed, "#prompt-input-field")
+    def on_text_changed(self, event: TextArea.Changed | None = None) -> None:
+        self.update_input_height()
+        val = self.input_field.text
+
+        if not self._pasted_text:
+            inserted_text = val
+            old_txt = self._last_known_text
+            if old_txt and val.startswith(old_txt):
+                inserted_text = val[len(old_txt):]
+
+            if len(inserted_text) > 200 or len(inserted_text.splitlines()) >= 4:
+                prefix = val[:len(val) - len(inserted_text)] if val.endswith(inserted_text) else old_txt
+                self._prefix_text = prefix
+                self._pasted_text = inserted_text
+                n_lines = len(inserted_text.splitlines())
+                badge_str = f"[Pasted ~{n_lines} lines]" if n_lines > 1 else f"[Pasted ~{len(inserted_text)} chars]"
+
+                if prefix and self.is_mounted:
+                    self.prefix_label.update(prefix)
+                    self.prefix_label.add_class("visible")
+                elif self.is_mounted:
+                    self.prefix_label.remove_class("visible")
+
+                if self.is_mounted:
+                    self.paste_badge.update(badge_str)
+                    self.paste_badge.add_class("visible")
+
+                self.input_field.placeholder = ""
+                self.input_field.load_text("")
+                self._last_known_text = ""
+                self.update_input_height()
+                return
+
+        self._last_known_text = val
 
     def set_listening_state(self, listening: bool) -> None:
         if listening:
@@ -186,7 +297,7 @@ class PromptBoxWidget(Widget):
             self.mic_button.update("🔴")
             self.mic_button.add_class("listening")
         else:
-            self.input_field.placeholder = self._default_placeholder
+            self.input_field.placeholder = "" if (self._pasted_text or self._prefix_text) else self._default_placeholder
             self.mic_button.update("⭕")
             self.mic_button.remove_class("listening")
 
@@ -239,20 +350,51 @@ class PromptBoxWidget(Widget):
 
     @property
     def text(self) -> str:
-        return self.input_field.text
+        input_txt = self.input_field.text
+        parts = []
+        if self._prefix_text:
+            parts.append(self._prefix_text)
+        if self._pasted_text:
+            parts.append(self._pasted_text)
+        if input_txt:
+            parts.append(input_txt)
+        return "\n\n".join(parts).strip() if parts else ""
 
     @text.setter
     def text(self, val: str) -> None:
-        self.input_field.load_text(val)
+        if len(val) > 200 or len(val.splitlines()) >= 4:
+            self._prefix_text = ""
+            self._pasted_text = val
+            n_lines = len(val.splitlines())
+            badge_str = f"[Pasted ~{n_lines} lines]" if n_lines > 1 else f"[Pasted ~{len(val)} chars]"
+            if self.is_mounted:
+                self.prefix_label.remove_class("visible")
+                self.paste_badge.update(badge_str)
+                self.paste_badge.add_class("visible")
+            self.input_field.placeholder = ""
+            self.input_field.load_text("")
+            self._last_known_text = ""
+        else:
+            self.clear_pasted_text()
+            self.input_field.load_text(val)
+            self._last_known_text = val
+
         lines = val.split("\n")
         last_row = max(0, len(lines) - 1)
         last_col = len(lines[last_row]) if lines else 0
-        try:
+        with contextlib.suppress(Exception):
             self.input_field.move_cursor((last_row, last_col))
-        except Exception:
-            pass
         self.update_input_height()
 
     def clear(self) -> None:
+        self._prefix_text = ""
+        self._pasted_text = ""
+        self._last_known_text = ""
+        self.input_field.placeholder = self._default_placeholder
+        if self.is_mounted:
+            self.paste_badge.remove_class("visible")
+            self.paste_badge.update("")
+            self.prefix_label.remove_class("visible")
+            self.prefix_label.update("")
         self.input_field.load_text("")
         self.update_input_height()

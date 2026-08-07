@@ -74,6 +74,7 @@ mcp:
 voice:
   enabled: true
   mode: voice
+  auto_send_msg: false
   tts:
     provider: edge_tts
     voice: en-GB-RyanNeural

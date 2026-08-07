@@ -253,6 +253,203 @@ def test_notification_toast_widget():
     assert "layer: overlay;" in toast.DEFAULT_CSS
 
 
+@pytest.mark.asyncio
+async def test_chat_view_tool_call_resets_current_assistant_widget():
+    from textual.app import App
+    from jarvis.ui.tui.widgets.chat_view import ChatViewWidget, MessageWidget, ToolCallWidget
+
+    class TestApp(App):
+        def compose(self):
+            yield ChatViewWidget(id="chat")
+
+    app = TestApp()
+    async with app.run_test():
+        chat = app.query_one(ChatViewWidget)
+        chat.start_assistant_stream()
+        assert chat._current_assistant_widget is not None
+
+        # Simulate text chunk before tool call
+        chat.append_assistant_chunk("Let me check Telegram...")
+        first_widget = chat._current_assistant_widget
+        assert first_widget is not None
+        assert first_widget.raw_content == "Let me check Telegram..."
+
+        # Add tool call
+        chat.add_tool_call("Telegram_List_Dialogs", "")
+        assert chat._current_assistant_widget is None
+
+        # Append response text chunk after tool call
+        chat.append_assistant_chunk("Found 10 messages: tokenrouter.com")
+        second_widget = chat._current_assistant_widget
+        assert second_widget is not None
+        assert second_widget is not first_widget
+        assert second_widget.raw_content == "Found 10 messages: tokenrouter.com"
+
+        # Verify children order: first text widget, then tool call widget, then second text widget
+        children = list(chat.children)
+        assert len(children) == 3
+        assert isinstance(children[0], MessageWidget)
+        assert children[0].raw_content == "Let me check Telegram..."
+        assert isinstance(children[1], ToolCallWidget)
+        assert isinstance(children[2], MessageWidget)
+        assert children[2].raw_content == "Found 10 messages: tokenrouter.com"
+
+
+@pytest.mark.asyncio
+async def test_pasted_text_badge_in_prompt_box():
+    from unittest.mock import MagicMock
+    from textual.widgets import TextArea
+    from jarvis.ui.tui.app import JarvisTUIApp
+    from jarvis.ui.tui.screens.main_screen import MainScreen
+
+    app = JarvisTUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        assert isinstance(screen, MainScreen)
+        box = screen.prompt_box
+        long_code = "print('hello world')\n" * 10  # 10 lines, > 200 chars
+
+        # 1. Test direct text assignment
+        box.text = long_code
+        assert box._pasted_text == long_code
+        assert "visible" in box.paste_badge.classes
+
+        # User types additional context prompt next to badge
+        box.input_field.load_text("explain this code")
+        assert box.text == f"{long_code}\n\nexplain this code"
+
+        # Clearing resets pasted attachment
+        box.clear()
+        assert box._pasted_text == ""
+        assert box._prefix_text == ""
+
+        # 2. Test typing "see this " then pasting long code
+        box.input_field.load_text("see this ")
+        box._last_known_text = "see this "
+
+        # Simulate paste event in input_field
+        box.input_field.load_text("see this " + long_code)
+        box.on_text_changed(MagicMock(spec=TextArea.Changed))
+
+        assert box._prefix_text == "see this "
+        assert box._pasted_text == long_code
+        assert "visible" in box.prefix_label.classes
+        assert "visible" in box.paste_badge.classes
+        assert box.input_field.text == ""
+
+        # Suffix text typed after badge
+        box.input_field.load_text("fix this bug")
+        assert box.text == f"see this \n\n{long_code}\n\nfix this bug"
+
+        # Backspacing when input_field is empty clears pasted attachment and restores prefix text
+        box.input_field.load_text("")
+        box.clear_pasted_text()
+        assert box._pasted_text == ""
+        assert box.input_field.text == "see this "
+
+
+@pytest.mark.asyncio
+async def test_prompt_history_up_down_navigation():
+    from unittest.mock import MagicMock
+    from textual.events import Key
+    from jarvis.ui.tui.app import JarvisTUIApp
+    from jarvis.ui.tui.screens.main_screen import MainScreen
+
+    app = JarvisTUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        assert isinstance(screen, MainScreen)
+        screen.process_user_query = MagicMock()
+
+        # Submit 2 prompts to populate history
+        screen.prompt_box.text = "first prompt"
+        await screen.submit_prompt()
+
+        screen.prompt_box.text = "second prompt"
+        await screen.submit_prompt()
+
+        # Press Up arrow key to navigate back in history
+        up_event = MagicMock(spec=Key)
+        up_event.key = "up"
+        screen.on_key(up_event)
+        assert screen.prompt_box.text == "second prompt"
+
+        screen.on_key(up_event)
+        assert screen.prompt_box.text == "first prompt"
+
+        # Press Down arrow key to navigate forward
+        down_event = MagicMock(spec=Key)
+        down_event.key = "down"
+        screen.on_key(down_event)
+        assert screen.prompt_box.text == "second prompt"
+
+        screen.on_key(down_event)
+        assert screen.prompt_box.text == ""
+
+
+@pytest.mark.asyncio
+async def test_voice_mode_auto_interrupt_on_submit():
+    from unittest.mock import MagicMock
+    from jarvis.ui.tui.app import JarvisTUIApp
+    from jarvis.ui.tui.screens.main_screen import MainScreen
+
+    app = JarvisTUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        assert isinstance(screen, MainScreen)
+        screen.process_user_query = MagicMock()
+        screen.voice_controller.is_active = True
+
+        screen.prompt_box.text = "Typed prompt while in voice mode"
+        await screen.submit_prompt()
+
+        # Voice controller should be stopped and prompt processed
+        assert screen.voice_controller.is_active is False
+        screen.process_user_query.assert_called_once_with("Typed prompt while in voice mode")
+
+
+@pytest.mark.asyncio
+async def test_voice_mode_auto_send_msg_false_populates_prompt_box():
+    from unittest.mock import AsyncMock, MagicMock
+    from jarvis.ui.tui.app import JarvisTUIApp
+    from jarvis.ui.tui.screens.main_screen import MainScreen
+
+    app = JarvisTUIApp()
+    async with app.run_test() as pilot:
+        await pilot.pause()
+        screen = pilot.app.screen
+        assert isinstance(screen, MainScreen)
+
+        # Mock engine voice config auto_send_msg = False
+        mock_engine = MagicMock()
+        mock_engine.config.voice.auto_send_msg = False
+        mock_vm = AsyncMock()
+        mock_vm.stop = MagicMock()
+        mock_vm.listen.return_value = "transcribed spoken query"
+        mock_engine.voice_manager = mock_vm
+        screen.engine = mock_engine
+        screen.voice_controller.engine = mock_engine
+
+        # Pre-populate prompt box with existing text and cursor at end
+        screen.prompt_box.input_field.load_text("Hello ")
+        screen.prompt_box.input_field.move_cursor((0, 6))
+        screen.prompt_box._last_known_text = "Hello "
+
+        # Run voice loop worker
+        screen.voice_controller.is_active = True
+        worker = screen.run_voice_loop()
+        await worker.wait()
+
+        # Should insert transcribed text at cursor position without overwriting existing text or sending
+        assert screen.prompt_box.text == "Hello transcribed spoken query"
+        assert screen.voice_controller.is_active is False
+
+
+
+
 
 
 

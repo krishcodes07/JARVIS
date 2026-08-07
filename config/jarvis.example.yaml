@@ -43,6 +43,7 @@ mcp:
 voice:
   enabled: true
   mode: "text"                          # text | voice (toggle with /voice in TUI)
+  auto_send_msg: true                   # auto send transcribed msg (true) or place in prompt box without sending (false)
   tts:
     provider: "edge_tts"                # edge_tts | elevenlabs
     voice: "en-US-JennyNeural"          # voice name / id

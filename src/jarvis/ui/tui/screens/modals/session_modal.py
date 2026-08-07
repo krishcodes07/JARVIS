@@ -79,7 +79,7 @@ class SessionModal(ModalScreen[str | None]):
             height="80%",
             show_search=True,
             search_placeholder="Search sessions...",
-            footer_text="pin/unpin ctrl+f   delete ctrl+d   rename ctrl+r",
+            footer_text="pin ctrl+f   delete ctrl+d   rename ctrl+r (type name in search box)",
         )
         self.sessions_data: list[dict] = []
         self.pinned_sessions: set[str] = _load_pinned_sessions()
@@ -176,6 +176,28 @@ class SessionModal(ModalScreen[str | None]):
                 except Exception as e:
                     logger.warning(f"Could not delete session {sid}: {e}")
                     return
+
+            # If active session was deleted, reset active engine session and main screen UI
+            if self.engine and self.engine.session and self.engine.session.session_id == sid:
+                from jarvis.core.session import Session
+                self.engine.session = Session(engine=self.engine)
+                try:
+                    main_screen = self.app.screen
+                    if hasattr(main_screen, "chat_view"):
+                        getattr(main_screen, "chat_view").clear_messages()
+                    if hasattr(main_screen, "header"):
+                        getattr(main_screen, "header").show_header()
+                    if hasattr(main_screen, "prompt_box"):
+                        getattr(main_screen, "prompt_box").show_hints()
+                    toast_fn = getattr(main_screen, "show_toast", None)
+                    if toast_fn:
+                        toast_fn(
+                            f"Active session '{sid}' deleted. Started new session.",
+                            title="Session Reset",
+                            style="info",
+                        )
+                except Exception:
+                    pass
 
             # Remove from pinned if it was pinned
             if sid in self.pinned_sessions:

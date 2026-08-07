@@ -300,8 +300,14 @@ class MCPModal(ModalScreen[None]):
                 try:
                     await mgr.client.disconnect(server_name)
                     logger.info("MCP server '%s' disabled via modal.", server_name)
+                    toast_fn = getattr(self.app.screen, "show_toast", None)
+                    if toast_fn:
+                        toast_fn(f"MCP server '{server_name}' disabled", title="MCP Server", style="info")
                 except Exception as e:
                     logger.warning("Failed to disconnect MCP server '%s': %s", server_name, e)
+                    toast_fn = getattr(self.app.screen, "show_toast", None)
+                    if toast_fn:
+                        toast_fn(f"Failed to disconnect '{server_name}': {e}", title="MCP Error", style="error")
             else:
                 # Reconnect (enable)
                 target_config = mgr.get_server_config(server_name, force_enabled=True)
@@ -309,8 +315,14 @@ class MCPModal(ModalScreen[None]):
                     try:
                         await mgr.client.connect(target_config)
                         logger.info("MCP server '%s' enabled via modal.", server_name)
+                        toast_fn = getattr(self.app.screen, "show_toast", None)
+                        if toast_fn:
+                            toast_fn(f"MCP server '{server_name}' enabled", title="MCP Server", style="success")
                     except Exception as e:
                         logger.warning("Failed to connect MCP server '%s': %s", server_name, e)
+                        toast_fn = getattr(self.app.screen, "show_toast", None)
+                        if toast_fn:
+                            toast_fn(f"Failed to connect '{server_name}': {e}", title="MCP Error", style="error")
 
             # Refresh the list
             self._refresh_servers_data()

@@ -73,6 +73,8 @@ class MainScreen(Screen):
         self.toast = NotificationToast(id="notification-toast")
         self._is_generating: bool = False
         self._current_worker = None
+        self._prompt_history: list[str] = []
+        self._history_index: int = -1
 
     def compose(self):
         yield self.header
@@ -171,14 +173,34 @@ class MainScreen(Screen):
             return
 
         if self.prompt_box.input_field.has_focus:
-            if is_slash and event.key == "down":
+            is_popover_open = self.popover.styles.display == "block"
+            if is_slash and is_popover_open and event.key == "down":
                 self.popover.highlight_next()
                 event.prevent_default()
                 event.stop()
-            elif is_slash and event.key == "up":
+            elif is_slash and is_popover_open and event.key == "up":
                 self.popover.highlight_prev()
                 event.prevent_default()
                 event.stop()
+            elif not is_popover_open and event.key == "up":
+                if self._prompt_history:
+                    if self._history_index == -1:
+                        self._history_index = len(self._prompt_history) - 1
+                    elif self._history_index > 0:
+                        self._history_index -= 1
+                    self.prompt_box.text = self._prompt_history[self._history_index]
+                    event.prevent_default()
+                    event.stop()
+            elif not is_popover_open and event.key == "down":
+                if self._history_index != -1:
+                    if self._history_index < len(self._prompt_history) - 1:
+                        self._history_index += 1
+                        self.prompt_box.text = self._prompt_history[self._history_index]
+                    else:
+                        self._history_index = -1
+                        self.prompt_box.text = ""
+                    event.prevent_default()
+                    event.stop()
 
     @on(TextArea.Changed, "#prompt-input-field")
     def on_prompt_text_changed(self, event: TextArea.Changed) -> None:
@@ -204,14 +226,24 @@ class MainScreen(Screen):
         if user_input.startswith("/") and selected_cmd and len(user_input) < len(selected_cmd.name):
             user_input = selected_cmd.name
 
+        # Stop active voice session cleanly if user submits typed prompt
+        if self.voice_controller.is_active:
+            self.voice_controller.stop()
+            self.prompt_box.set_listening_state(False)
+
         if user_input.startswith("/"):
             self.prompt_box.clear()
             self.popover.hide()
             await self.handle_slash_command(user_input)
             return
 
-        if self._is_generating or self.voice_controller.is_active:
+        if self._is_generating:
             return
+
+        # Record non-slash user prompt in prompt history
+        if not self._prompt_history or self._prompt_history[-1] != user_input:
+            self._prompt_history.append(user_input)
+        self._history_index = -1
 
         self.prompt_box.clear()
         self.popover.hide()
@@ -312,9 +344,20 @@ class MainScreen(Screen):
                     await asyncio.sleep(0.2)
                     continue
 
+                user_query = spoken_text.strip()
+
+                # Check auto_send_msg setting in voice config
+                auto_send = True
+                if self.engine and self.engine.config and hasattr(self.engine.config.voice, "auto_send_msg"):
+                    auto_send = self.engine.config.voice.auto_send_msg
+
+                if not auto_send:
+                    # Insert transcribed text at current cursor location without sending
+                    self.prompt_box.insert_text(user_query)
+                    break
+
                 # 2. Reset listening UI state while processing response
                 self.prompt_box.set_listening_state(False)
-                user_query = spoken_text.strip()
                 self.prompt_box.clear()
                 self.chat_view.add_user_message(user_query)
 
@@ -433,8 +476,11 @@ class MainScreen(Screen):
                 try:
                     import pyperclip  # type: ignore
                     pyperclip.copy(last_text)
-                except Exception:
-                    pass
+                    self.show_toast("Copied last AI response to clipboard", title="Clipboard", style="success")
+                except Exception as e:
+                    self.show_toast(f"Could not copy to clipboard: {e}", title="Clipboard Warning", style="warning")
+            else:
+                self.show_toast("No AI response content available to copy", title="Clipboard", style="info")
 
         elif cmd == "/provider":
             if args and self.engine and self.engine.provider_manager:
@@ -451,13 +497,16 @@ class MainScreen(Screen):
             else:
                 self.action_open_models()
 
-        elif cmd in ("/model", "/connect") and args:
-            model_name = args[0]
-            if self.engine and self.engine.config:
-                self.engine.config.provider.model = model_name
-                self.engine.config.save()
-                self.update_engine_status()
-                self.chat_view.add_user_message(f"✓ Switched active model to: {model_name}")
+        elif cmd in ("/model", "/connect"):
+            if args:
+                model_name = args[0]
+                if self.engine and self.engine.config:
+                    self.engine.config.provider.model = model_name
+                    self.engine.config.save()
+                    self.update_engine_status()
+                    self.chat_view.add_user_message(f"✓ Switched active model to: {model_name}")
+            else:
+                self.action_open_models()
 
         elif cmd in ("/stt", "/tts", "/voices"):
             info = self.voice_controller.get_status_info()

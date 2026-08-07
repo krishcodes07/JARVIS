@@ -235,8 +235,8 @@ class ChatViewWidget(VerticalScroll):
         if self._current_assistant_widget is not None:
             if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
                 self._current_assistant_widget.remove()
-                self._current_assistant_widget = None
-                self._is_first_chunk = False
+            self._current_assistant_widget = None
+            self._is_first_chunk = False
 
         tool_w = ToolCallWidget(tool_name=tool_name, args_str=args_str)
         self.mount(tool_w)
@@ -249,8 +249,8 @@ class ChatViewWidget(VerticalScroll):
         if self._current_assistant_widget is not None:
             if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
                 self._current_assistant_widget.remove()
-                self._current_assistant_widget = None
-                self._is_first_chunk = False
+            self._current_assistant_widget = None
+            self._is_first_chunk = False
 
         if self._last_tool_widget is not None:
             self._last_tool_widget.set_output(output_text)
@@ -264,8 +264,9 @@ class ChatViewWidget(VerticalScroll):
 
     def add_error_message(self, text: str) -> None:
         self._stop_loading_timer()
-        if self._current_assistant_widget is not None and self._is_first_chunk:
-            self._current_assistant_widget.remove()
+        if self._current_assistant_widget is not None:
+            if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
+                self._current_assistant_widget.remove()
             self._current_assistant_widget = None
             self._is_first_chunk = False
         msg = MessageWidget(content=text, role="error")
@@ -295,16 +296,16 @@ class ChatViewWidget(VerticalScroll):
         if self._start_time == 0.0:
             self._start_time = time.time()
 
-        if self._is_first_chunk:
-            self._is_first_chunk = False
-            self._stop_loading_timer()
-            if self._current_assistant_widget:
-                self._current_assistant_widget.raw_content = ""
-
         if self._current_assistant_widget is None:
             msg = MessageWidget(content="", role="assistant")
             self.mount(msg)
             self._current_assistant_widget = msg
+            self._is_first_chunk = False
+            self._stop_loading_timer()
+        elif self._is_first_chunk:
+            self._is_first_chunk = False
+            self._stop_loading_timer()
+            self._current_assistant_widget.raw_content = ""
 
         new_content = self._current_assistant_widget.raw_content + chunk
         self._current_assistant_widget.update_content(new_content)
