@@ -366,3 +366,35 @@ class JarvisConfig(BaseModel):
             return result
         logger.warning("models.json not found.")
         return {}
+
+
+def save_api_key_to_env(env_var_name: str, key_value: str) -> None:
+    """Save an API key to os.environ and persist it to the project's .env file."""
+    os.environ[env_var_name] = key_value
+    env_path = PROJECT_ROOT / ".env"
+
+    lines: list[str] = []
+    if env_path.exists():
+        with open(env_path, encoding="utf-8") as f:
+            lines = f.readlines()
+
+    updated = False
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(f"{env_var_name}=") or stripped.startswith(f"export {env_var_name}="):
+            new_lines.append(f"{env_var_name}={key_value}\n")
+            updated = True
+        else:
+            new_lines.append(line)
+
+    if not updated:
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines.append("\n")
+        new_lines.append(f"{env_var_name}={key_value}\n")
+
+    with open(env_path, "w", encoding="utf-8") as f:
+        f.writelines(new_lines)
+
+    logger.info(f"Saved API key for {env_var_name} to {env_path}")
+

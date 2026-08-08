@@ -1,11 +1,12 @@
 """
 Model Selector Modal Screen — Dynamic provider & model browser (/models).
-Loads cached models instantly, fetches live models from all providers, and tracks 5 recent models.
+Displays ONLY connected providers and their models from models.dev database catalog.
+Supports Ctrl+A shortcut to open Connect Provider modal and auto-scrolls to connected providers.
 """
 
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -15,11 +16,10 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
+from jarvis.providers.models_dev import is_provider_connected, load_models_dev_cache
 from jarvis.ui.tui.utils import (
     handle_search_key_navigation,
-    load_models_cache,
     load_recent_models,
-    save_models_cache,
     save_recent_model,
 )
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class ModelModal(ModalScreen[dict[str, str] | None]):
-    """Modal dialog for searching, filtering, and switching LLM models across all providers."""
+    """Modal dialog for searching, filtering, and switching LLM models across connected providers."""
 
     DEFAULT_CSS = """
     ModelModal {
@@ -40,9 +40,15 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
     }
     """
 
-    def __init__(self, engine: JarvisEngine | None = None, **kwargs) -> None:
+    def __init__(
+        self,
+        engine: JarvisEngine | None = None,
+        initial_provider: str | None = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
         self.engine = engine
+        self.target_scroll_provider: str | None = initial_provider
         self.dialog = ModalDialog(
             title="Select model",
             dialog_id="model-dialog",
@@ -50,7 +56,7 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
             height="80%",
             show_search=True,
             search_placeholder="Search...",
-            footer_text="↑↓ navigate   Enter select   Esc cancel",
+            footer_text="Connect Provider ctrl+a",
         )
         self.models_data: list[dict[str, Any]] = []
         self._is_loading: bool = True
@@ -73,9 +79,9 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
             self.search_input.focus()
         self._is_loading = True
         self._loading_frame = 0
-        self._loading_timer = self.set_interval(0.3, self._animate_loading)
+        self._loading_timer = self.set_interval(0.1, self._animate_loading)
         self.populate_list()
-        self.refresh_all_provider_models()
+        self.load_models_async()
 
     def _animate_loading(self) -> None:
         if self._is_loading and self.is_mounted:
@@ -87,14 +93,56 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
             self._loading_timer.stop()
             self._loading_timer = None
 
+    @work(exclusive=True)
+    async def load_models_async(self) -> None:
+        try:
+            self.models_data = await asyncio.to_thread(self._build_models_data)
+        finally:
+            self._is_loading = False
+            if self._loading_timer:
+                self._loading_timer.stop()
+                self._loading_timer = None
+            if self.is_mounted:
+                self.populate_list(self.search_input.value if self.search_input else "")
+
+    def refresh_models_list(self) -> None:
+        self._is_loading = True
+        self._loading_frame = 0
+        if not self._loading_timer:
+            self._loading_timer = self.set_interval(0.1, self._animate_loading)
+        self.populate_list()
+        self.load_models_async()
+
     def on_key(self, event) -> None:
-        """Delegate arrow keys and Enter from search input to the option list."""
+        """Handle Ctrl+A shortcut to open Connect Provider modal or delegate navigation keys."""
+        is_ctrl_a = (
+            event.key in ("ctrl+a", "ctrl+A")
+            or (getattr(event, "character", None) in ("a", "A") and getattr(event, "ctrl", False))
+        )
+        if is_ctrl_a:
+            self.action_open_connect()
+            event.prevent_default()
+            event.stop()
+            return
+
         handle_search_key_navigation(event, self.search_input, self.option_list)
+
+    def action_open_connect(self) -> None:
+        from jarvis.ui.tui.screens.modals.connect_modal import ConnectModal
+
+        def on_connect_done(res: dict[str, str] | None) -> None:
+            if res and isinstance(res, dict) and res.get("action") == "open_models":
+                target_pid = res.get("provider_id")
+                if hasattr(self.app, "action_open_models"):
+                    self.app.action_open_models(initial_provider=target_pid)
+
+        self.dismiss(None)
+        self.app.push_screen(ConnectModal(engine=self.engine), on_connect_done)
 
     def _get_active_provider(self) -> str:
         if self.engine and self.engine.config and self.engine.config.provider:
             return self.engine.config.provider.active
-        return "openrouter"
+        return "groq"
 
     def _get_active_model(self) -> str:
         if self.engine and self.engine.config and self.engine.config.provider:
@@ -103,50 +151,64 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
 
     def _build_models_data(self) -> list[dict[str, Any]]:
         recent_list = load_recent_models()
-        models_cache = load_models_cache()
+        cache = load_models_dev_cache()
 
         active_provider = self._get_active_provider().lower()
         active_model = self._get_active_model()
 
         all_entries: list[dict[str, Any]] = []
 
-        # 1. Recent 5 Models
+        # Find all connected providers from models.dev database
+        connected_providers: dict[str, dict[str, Any]] = {}
+        for pid, pdata in cache.items():
+            if is_provider_connected(pid, pdata):
+                connected_providers[pid.lower()] = pdata
+
+        # Add fallback/active provider if engine has provider_manager
+        if self.engine and self.engine.provider_manager:
+            for pid, pdef in self.engine.provider_manager.registry.get_all().items():
+                if pdef.is_connected and pid.lower() not in connected_providers:
+                    connected_providers[pid.lower()] = pdef.raw
+
+        # 1. Recent Models (only for connected providers)
         if recent_list:
             for item in recent_list[:5]:
                 mid = item.get("id", "")
                 mprov = item.get("provider", "").lower()
-                all_entries.append({
-                    "id": mid,
-                    "name": item.get("name", mid),
-                    "provider": mprov,
-                    "category": "Recently Used",
-                    "active": (mprov == active_provider and mid == active_model),
-                })
+                if mprov in connected_providers or not connected_providers:
+                    all_entries.append({
+                        "id": mid,
+                        "name": item.get("name", mid),
+                        "provider": mprov,
+                        "category": "Recently Used",
+                        "active": (mprov == active_provider and mid == active_model),
+                    })
 
-        # 2 & 3. Active Provider first, then other providers
-        if self.engine and self.engine.provider_manager:
-            all_defs = self.engine.provider_manager.registry.get_all()
-        else:
-            all_defs = {}
-
+        # Sort connected provider names, active provider first
         sorted_prov_names = sorted(
-            all_defs.keys(),
+            connected_providers.keys(),
             key=lambda name: (0 if name.lower() == active_provider else 1, name.lower()),
         )
 
         for prov_name in sorted_prov_names:
-            prov_def = all_defs[prov_name]
-            disp_name = getattr(prov_def, "display_name", prov_name.title())
+            pdata = connected_providers[prov_name]
+            disp_name = pdata.get("name") or prov_name.title()
             is_active_prov = (prov_name.lower() == active_provider)
             category_title = f"Active: {disp_name}" if is_active_prov else disp_name
 
-            cached = models_cache.get(prov_name.lower()) or [
-                {"id": prov_def.default_model, "name": prov_def.default_model}
-            ]
+            raw_models = pdata.get("models") or {}
+            model_items = []
+            if isinstance(raw_models, dict) and raw_models:
+                for mid, mdata in raw_models.items():
+                    mname = mdata.get("name") if isinstance(mdata, dict) else str(mdata)
+                    model_items.append({"id": mid, "name": mname or mid})
+            else:
+                default_m = pdata.get("default_model") or prov_name
+                model_items.append({"id": default_m, "name": default_m})
 
-            for m in cached:
-                mid = m.get("id", str(m))
-                mname = m.get("name", mid)
+            for m in model_items:
+                mid = m["id"]
+                mname = m["name"]
                 all_entries.append({
                     "id": mid,
                     "name": mname,
@@ -157,44 +219,6 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
 
         return all_entries
 
-    @work(exclusive=True)
-    async def refresh_all_provider_models(self) -> None:
-        """Asynchronously fetch live models from all providers and update disk cache."""
-        try:
-            self.models_data = self._build_models_data()
-            if not self.engine or not self.engine.provider_manager:
-                return
-
-            all_defs = self.engine.provider_manager.registry.get_all()
-            models_cache = load_models_cache()
-            updated = False
-
-            for prov_name in sorted(all_defs.keys()):
-                try:
-                    live_list = await self.engine.provider_manager.get_models(prov_name)
-                    if live_list:
-                        models_cache[prov_name.lower()] = [
-                            {
-                                "id": str(m.get("id") or str(m)),
-                                "name": str(m.get("name") or m.get("id") or str(m)),
-                            }
-                            for m in live_list
-                        ]
-                        updated = True
-                except Exception as e:
-                    logger.debug(f"Could not refresh models for provider {prov_name}: {e}")
-
-            if updated:
-                save_models_cache(models_cache)
-                self.models_data = self._build_models_data()
-        finally:
-            self._is_loading = False
-            if self._loading_timer:
-                self._loading_timer.stop()
-                self._loading_timer = None
-            if self.is_mounted:
-                self.populate_list(self.search_input.value if self.search_input else "")
-
     def on_input_changed(self, event: Input.Changed) -> None:
         self.populate_list(filter_text=event.value)
 
@@ -204,17 +228,29 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
         self.option_list.clear_options()
 
         if self._is_loading:
-            dots = "." * ((self._loading_frame % 3) + 1)
+            frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+            spinner = frames[self._loading_frame % len(frames)]
             for _ in range(4):
                 self.option_list.add_option(Option(Text(""), disabled=True))
-            msg = f"Fetching models {dots:<3}"
+            msg = f"{spinner}  Loading models..."
             t = Text(msg.center(54), style="bold #3b82f6")
             self.option_list.add_option(Option(t, disabled=True))
             return
+
         query = filter_text.strip().lower()
+
+        if not self.models_data:
+            msg = Text("No connected providers found. Press Ctrl+A to connect.", style="bold #f97316")
+            self.option_list.add_option(Option(msg, disabled=True))
+            return
 
         current_category = ""
         seen_keys: set[str] = set()
+        target_option_index: int | None = None
+        current_option_idx = 0
+
+        target_prov = (self.target_scroll_provider or "").strip().lower()
+
         for m in self.models_data:
             if query:
                 match_name = query in m["name"].lower()
@@ -233,13 +269,13 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
                 current_category = cat
                 header_text = Text(f"\n{cat}", style="bold #3b82f6")
                 self.option_list.add_option(Option(header_text, disabled=True))
+                current_option_idx += 1
 
             active_bullet = "• " if m.get("active") else "  "
             active_style = "bold #3b82f6" if m.get("active") else "white"
 
             name = m["name"][:34]
             prov = m["provider"]
-            # Right-align provider within a fixed-width line
             fill = 52 - len(name) - len(prov)
             if fill < 1:
                 fill = 1
@@ -251,6 +287,21 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
             t.append(prov, style="dim #737373")
 
             self.option_list.add_option(Option(t, id=option_key))
+
+            if target_prov and m["provider"].lower() == target_prov and target_option_index is None:
+                target_option_index = current_option_idx
+
+            current_option_idx += 1
+
+        # Scroll to target provider if specified
+        if target_option_index is not None and self.option_list.option_count > target_option_index:
+            try:
+                self.option_list.highlighted = target_option_index
+                if hasattr(self.option_list, "scroll_to_highlight"):
+                    self.option_list.scroll_to_highlight(top=True)
+            except Exception as e:
+                logger.debug(f"Could not scroll to target provider: {e}")
+            self.target_scroll_provider = None
 
     def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
         selected_key = getattr(event, "option_id", None) or (

@@ -37,10 +37,10 @@
 
 ## Why J.A.R.V.I.S.?
 
-Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 9+ LLM providers directly, interact via rich terminal TUI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
+Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 180+ LLM providers via `models.dev` integration, interact via rich terminal TUI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
 
-- **Zero-Middleman Provider Routing** — Connect directly to APIs (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode Zen, TokenRouter) with automatic failover fallback routing.
-- **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, and voice toggle.
+- **180+ LLM Provider Catalog (`models.dev`)** — Direct integration with 180+ LLM providers (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.) with automatic fallback streaming routing.
+- **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, keyboard shortcuts (`Ctrl+M` model picker, `Ctrl+A` API key modal), and voice toggle.
 - **Native MCP Ecosystem & Creation** — Seamlessly integrate Gmail, Calendar, Excel, Telegram, Filesystem, Terminal, Firecrawl, and Vercel — or let JARVIS generate custom MCP servers dynamically.
 - **Integrated Voice Suite** — Natural speech-to-text (STT) input and real-time streaming text-to-speech (TTS) output with hands-free conversation mode.
 
@@ -62,13 +62,14 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 
 ## Features
 
-- **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, and voice controls. (Web UI & Desktop GUI coming soon).
-- **9+ LLM Provider Backends** — Native protocol support for OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral AI, OpenCode Zen, and TokenRouter, complete with automatic fallback routing upon API rate limits or failures.
+- **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), API key connector (`Ctrl+A`), and voice controls.
+- **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fallback routing upon API errors.
+- **Full Function Calling & Tool Support** — Native tool use support across OpenAI, Anthropic, and Google Gemini APIs (with native `functionCall` and `functionResponse` payload structure).
 - **Multi-Tiered Memory & RAG** — Conversation history with automatic summarization, autonomous long-term fact extraction, and vector semantic search powered by ChromaDB.
 - **Built-in Tools & Security Sandbox** — Calculator, clipboard manager, date/time utility, screenshot generator, web URL reader, process manager, and shell command runner operating inside a configurable security sandbox.
 - **Native MCP Integration** — Direct integration with stdio and npx Model Context Protocol servers (Gmail, Calendar, Excel, Telegram, Terminal, Filesystem, Firecrawl, Vercel).
 - **Real-time Voice Mode** — Speech-to-text input paired with edge/ElevenLabs text-to-speech streaming for hands-free operation.
-- **Fully Configurable** — YAML (`config/jarvis.yaml`), JSON registries (`config/providers.json`, `src/jarvis/mcp/servers.json`), and `.env` credentials.
+- **Fully Configurable** — YAML (`config/jarvis.yaml`), dynamic `models.dev` cache (`data/models_dev_cache.json`), and `.env` credentials.
 - **Docker Ready** — Containerized multi-stage Docker build and one-command Docker Compose stack.
 
 ---

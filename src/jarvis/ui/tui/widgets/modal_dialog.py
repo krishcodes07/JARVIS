@@ -81,7 +81,7 @@ class ModalDialog(Vertical):
     ModalDialog .modal-search {
         background: transparent;
         border: solid #333333;
-        margin: 1 0 0 0;
+        margin: 0;
         color: #ffffff;
         height: 3;
         padding: 0 1;

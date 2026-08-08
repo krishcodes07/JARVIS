@@ -7,7 +7,7 @@ JARVIS relies on a multi-tiered, dynamic configuration system consisting of YAML
 | File | Location | Purpose |
 |------|----------|---------|
 | **Main Config** | `config/jarvis.yaml` | Core settings (provider selection, memory, tools, voice, UI options) |
-| **Providers Registry** | `config/providers.json` | API endpoints, model IDs, protocols, and supported capabilities |
+| **models.dev Cache** | `data/models_dev_cache.json` | Local cache of 180+ LLM providers and model catalogs from models.dev |
 | **MCP Servers Registry** | `src/jarvis/mcp/servers.json` | Registered MCP stdio and npx server command definitions |
 | **Environment Variables** | `.env` | Provider API keys, secret credentials, and private tokens |
 
@@ -26,7 +26,7 @@ General application metadata:
 
 ### 2. `provider`
 Active LLM model routing and fallback configuration:
-- `active`: Key matching a provider in `providers.json` (e.g. `opencode-zen`, `groq`, `openai`, `anthropic`).
+- `active`: Key matching a provider in models.dev catalog (e.g. `opencode`, `groq`, `openai`, `anthropic`, `google`, `kilo`).
 - `model`: Target model ID.
 - `temperature`: Generation temperature (0.0 to 1.0).
 - `max_tokens`: Max tokens per response context.

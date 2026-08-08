@@ -18,6 +18,7 @@ from typing import Any
 
 import httpx
 
+from jarvis.core.exceptions import ProviderError
 from jarvis.providers.base import (
     BaseProvider,
     GenerationConfig,
@@ -68,9 +69,16 @@ class GoogleProvider(BaseProvider):
 
         url = f"/models/{config.model}:generateContent"
         response = await self._client.post(url, json=payload)
-        response.raise_for_status()
-        data = response.json()
+        if response.is_error:
+            try:
+                err_data = response.json()
+                err_msg = err_data.get("error", {}).get("message", response.text)
+            except Exception:
+                err_msg = response.text
+            logger.error(f"Google API error ({response.status_code}): {err_msg}")
+            raise ProviderError(f"Google API Error ({response.status_code}): {err_msg}")
 
+        data = response.json()
         return self._parse_response(data)
 
     async def stream(
@@ -86,7 +94,16 @@ class GoogleProvider(BaseProvider):
         async with self._client.stream(
             "POST", url, json=payload, params={"alt": "sse"}
         ) as response:
-            response.raise_for_status()
+            if response.is_error:
+                error_bytes = await response.aread()
+                try:
+                    err_data = json.loads(error_bytes.decode())
+                    err_msg = err_data.get("error", {}).get("message", error_bytes.decode())
+                except Exception:
+                    err_msg = error_bytes.decode()
+                logger.error(f"Google Stream API error ({response.status_code}): {err_msg}")
+                raise ProviderError(f"Google API Error ({response.status_code}): {err_msg}")
+
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):
                     continue
@@ -146,6 +163,29 @@ class GoogleProvider(BaseProvider):
 
     # ─── Private helpers ──────────────────────────────────────
 
+    def _clean_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+        """Convert schema type strings to uppercase and clean for Google OpenAPI specs."""
+        if not isinstance(schema, dict):
+            return schema
+
+        cleaned: dict[str, Any] = {}
+        for k, v in schema.items():
+            if k in ("$schema", "title"):
+                continue
+            if k == "type" and isinstance(v, str):
+                cleaned[k] = v.upper()
+            elif isinstance(v, dict):
+                cleaned[k] = self._clean_schema(v)
+            elif isinstance(v, list):
+                cleaned[k] = [self._clean_schema(item) if isinstance(item, dict) else item for item in v]
+            else:
+                cleaned[k] = v
+
+        if "type" not in cleaned:
+            cleaned["type"] = "OBJECT"
+
+        return cleaned
+
     def _format_contents(
         self, messages: list[Message]
     ) -> tuple[str | None, list[dict[str, Any]]]:
@@ -161,12 +201,50 @@ class GoogleProvider(BaseProvider):
             if msg.role == "system":
                 text = msg.content if isinstance(msg.content, str) else str(msg.content)
                 system_parts.append(text)
+            elif msg.role == "tool":
+                tool_name = msg.name or "tool"
+                tool_content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                contents.append({
+                    "role": "user",
+                    "parts": [{
+                        "functionResponse": {
+                            "name": tool_name,
+                            "response": {"name": tool_name, "content": tool_content},
+                        }
+                    }],
+                })
             else:
                 role = "model" if msg.role == "assistant" else "user"
+                parts: list[dict[str, Any]] = []
+
+                if msg.role == "assistant" and msg.tool_calls:
+                    for tc in msg.tool_calls:
+                        fn = tc.get("function", {})
+                        fn_name = fn.get("name", "")
+                        args_raw = fn.get("arguments", {})
+                        if isinstance(args_raw, str):
+                            try:
+                                args = json.loads(args_raw)
+                            except Exception:
+                                args = {"input": args_raw}
+                        else:
+                            args = args_raw or {}
+                        parts.append({
+                            "functionCall": {
+                                "name": fn_name,
+                                "args": args,
+                            }
+                        })
+
                 text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                if text:
+                    parts.insert(0, {"text": text})
+                elif not parts:
+                    parts.append({"text": ""})
+
                 contents.append({
                     "role": role,
-                    "parts": [{"text": text}],
+                    "parts": parts,
                 })
 
         system_instruction = "\n\n".join(system_parts) if system_parts else None
@@ -200,7 +278,7 @@ class GoogleProvider(BaseProvider):
                         {
                             "name": tool.name,
                             "description": tool.description,
-                            "parameters": tool.parameters,
+                            "parameters": self._clean_schema(tool.parameters) if tool.parameters else {"type": "OBJECT", "properties": {}},
                         }
                         for tool in config.tools
                     ]

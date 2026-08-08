@@ -53,7 +53,22 @@ class ProviderManager:
         """Initialize the provider manager and load the active provider."""
         self.registry.load()
         active_name = self.config.provider.active
-        await self.switch_provider(active_name)
+        try:
+            await self.switch_provider(active_name)
+        except Exception as e:
+            logger.warning(f"Could not initialize active provider '{active_name}': {e}")
+            connected = self.registry.list_connected()
+            if connected:
+                for conn_p in connected:
+                    try:
+                        await self.switch_provider(conn_p.name)
+                        self.config.provider.active = conn_p.name
+                        if conn_p.default_model:
+                            self.config.provider.model = conn_p.default_model
+                        logger.info(f"Switched active provider to connected provider '{conn_p.name}'")
+                        break
+                    except Exception as ex:
+                        logger.warning(f"Could not switch to connected provider '{conn_p.name}': {ex}")
 
     async def switch_provider(self, name: str) -> None:
         """Switch to a different provider.
@@ -61,9 +76,13 @@ class ProviderManager:
         Args:
             name: The provider name from providers.json.
         """
-        # Close existing provider
-        if self._active_provider:
-            await self._active_provider.close()
+        # Close existing provider safely
+        old_provider = self._active_provider
+        self._active_provider = None
+
+        if old_provider:
+            with contextlib.suppress(Exception):
+                await old_provider.close()
 
         provider_def = self.registry.get(name)
 
@@ -94,7 +113,7 @@ class ProviderManager:
         Includes automatic fallback on failure if configured.
         """
         if not self._active_provider:
-            raise ProviderError("No active provider. Call initialize() first.")
+            raise ProviderError("No active provider configured or initialized.")
 
         if config is None:
             config = GenerationConfig(
@@ -119,7 +138,7 @@ class ProviderManager:
     ) -> AsyncIterator[StreamChunk]:
         """Stream a response using the active provider."""
         if not self._active_provider:
-            raise ProviderError("No active provider. Call initialize() first.")
+            raise ProviderError("No active provider configured or initialized.")
 
         if config is None:
             config = GenerationConfig(
@@ -129,8 +148,18 @@ class ProviderManager:
                 top_p=self.config.provider.top_p,
             )
 
-        async for chunk in self._active_provider.stream(messages, config):
-            yield chunk
+        has_yielded = False
+        try:
+            async for chunk in self._active_provider.stream(messages, config):
+                has_yielded = True
+                yield chunk
+        except Exception as e:
+            logger.error(f"Provider {self._active_name} stream failed: {e}")
+            if not has_yielded and self.config.provider.fallback.enabled:
+                async for chunk in self._fallback_stream(messages, config):
+                    yield chunk
+            else:
+                raise
 
     async def shutdown(self) -> None:
         """Shut down the active provider."""
@@ -139,7 +168,7 @@ class ProviderManager:
             self._active_provider = None
 
     async def get_models(self, provider_name: str | None = None) -> list[dict[str, Any]]:
-        """Fetch available models dynamically from the provider's /models API endpoint.
+        """Fetch available models for a provider directly from the models.dev catalog.
 
         Args:
             provider_name: Provider name to fetch models for. Defaults to active provider.
@@ -148,30 +177,31 @@ class ProviderManager:
             List of model dicts containing 'id' and 'name'.
         """
         target_name = provider_name or self._active_name
-        if target_name == self._active_name and self._active_provider:
-            try:
-                return await self._active_provider.list_models()
-            except Exception as e:
-                logger.warning(f"Failed to fetch active provider models: {e}")
+        if not target_name:
+            return []
 
-        provider_def = self.registry.get(target_name)
-        api_key = os.getenv(provider_def.api_key_env, "")
-        if not api_key:
-            return [{"id": provider_def.default_model, "name": provider_def.default_model}]
-
-        temp_provider = self._create_protocol(
-            protocol=provider_def.protocol,
-            api_key=api_key,
-            base_url=provider_def.base_url,
-            extra_headers=provider_def.extra_headers,
-        )
         try:
-            return await temp_provider.list_models()
+            provider_def = self.registry.get(target_name)
+            raw_models = provider_def.models or {}
+            results: list[dict[str, Any]] = []
+
+            for mid, mdata in raw_models.items():
+                mname = mdata.get("name") if isinstance(mdata, dict) else str(mdata)
+                results.append({
+                    "id": mid,
+                    "name": mname or mid,
+                    "description": mdata.get("description", "") if isinstance(mdata, dict) else "",
+                })
+
+            if results:
+                return sorted(results, key=lambda x: str(x["id"]).lower())
+
+            if provider_def.default_model:
+                return [{"id": provider_def.default_model, "name": provider_def.default_model}]
         except Exception as e:
             logger.warning(f"Failed to fetch models for provider {target_name}: {e}")
-            return [{"id": provider_def.default_model, "name": provider_def.default_model}]
-        finally:
-            await temp_provider.close()
+
+        return []
 
     def get_provider(self, name: str) -> BaseProvider | None:
         """Return a protocol instance for a named provider without switching.
@@ -253,6 +283,8 @@ class ProviderManager:
         try:
             await self.switch_provider(fallback.provider)
             config.model = fallback.model
+            if not self._active_provider:
+                raise ProviderError(f"Fallback provider '{fallback.provider}' could not be initialized.")
             return await self._active_provider.generate(messages, config)
         except Exception as e:
             logger.error(f"Fallback provider also failed: {e}")
@@ -261,3 +293,29 @@ class ProviderManager:
             # Restore original provider
             with contextlib.suppress(Exception):
                 await self.switch_provider(original_name)
+
+    async def _fallback_stream(
+        self,
+        messages: list[Message],
+        config: GenerationConfig,
+    ) -> AsyncIterator[StreamChunk]:
+        """Attempt streaming with the fallback provider."""
+        fallback = self.config.provider.fallback
+        logger.warning(f"Falling back to {fallback.provider} for streaming...")
+
+        original_name = self._active_name
+        try:
+            await self.switch_provider(fallback.provider)
+            config.model = fallback.model
+            if not self._active_provider:
+                raise ProviderError(f"Fallback provider '{fallback.provider}' could not be initialized.")
+            async for chunk in self._active_provider.stream(messages, config):
+                yield chunk
+        except Exception as e:
+            logger.error(f"Fallback provider stream also failed: {e}")
+            raise ProviderError(f"Both primary and fallback provider streams failed: {e}") from e
+        finally:
+            # Restore original provider
+            with contextlib.suppress(Exception):
+                await self.switch_provider(original_name)
+

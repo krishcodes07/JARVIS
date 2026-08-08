@@ -7,7 +7,7 @@ def test_model_modal_safe_config_access():
     engine.config = None  # engine.config is None prior to initialization
 
     modal = ModelModal(engine=engine)
-    assert modal._get_active_provider() == "openrouter"
+    assert modal._get_active_provider() == "groq"
     assert modal._get_active_model() == ""
 
     data = modal._build_models_data()
@@ -32,4 +32,4 @@ def test_model_modal_safe_config_access():
 
     assert dismissed_result is not None
     assert dismissed_result["id"] == "custom-model-id"
-    assert dismissed_result["provider"] == "openrouter"
+    assert dismissed_result["provider"] == "groq"

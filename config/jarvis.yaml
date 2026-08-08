@@ -4,15 +4,15 @@ jarvis:
   persona: professional_assistant
   log_level: INFO
 provider:
-  active: opencode-zen
-  model: deepseek-v4-flash-free
+  active: google
+  model: gemini-3.5-flash
   temperature: 0.7
   max_tokens: 16000
   top_p: 1.0
   fallback:
     enabled: true
-    provider: nvidia
-    model: z-ai/glm-5.2
+    provider: kilo
+    model: kilo-auto/free
 memory:
   conversation:
     enabled: true
@@ -103,7 +103,7 @@ voice:
 ui:
   default: tui
   tui:
-    theme: jarvis
+    theme: mercury
     show_tool_output: true
     show_thinking: false
   web:

@@ -78,7 +78,18 @@ class OpenAIProvider(BaseProvider):
         payload = self._build_payload(messages, config, stream=True)
 
         async with self._client.stream("POST", "/chat/completions", json=payload) as response:
-            response.raise_for_status()
+            if response.is_error:
+                error_bytes = await response.aread()
+                try:
+                    import json
+                    err_data = json.loads(error_bytes.decode())
+                    err_msg = err_data.get("error", {}).get("message", error_bytes.decode())
+                except Exception:
+                    err_msg = error_bytes.decode()
+                logger.error(f"OpenAI Stream API error ({response.status_code}): {err_msg}")
+                from jarvis.core.exceptions import ProviderError
+                raise ProviderError(f"OpenAI API Error ({response.status_code}): {err_msg}")
+
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):
                     continue

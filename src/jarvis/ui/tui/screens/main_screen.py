@@ -20,6 +20,7 @@ from textual.worker import get_current_worker
 from jarvis.core.config import DATA_DIR
 from jarvis.ui.tui.screens.modals import (
     ConfigModal,
+    ConnectModal,
     DebugModal,
     HelpModal,
     MCPModal,
@@ -416,6 +417,7 @@ class MainScreen(Screen):
             "/quit": lambda: self.app.exit(),
             "/sessions": self.action_open_sessions,
             "/models": self.action_open_models,
+            "/connect": self.action_open_connect,
             "/help": self.action_open_help,
             "/mcp": self.action_open_mcps,
             "/config": self.action_open_config,
@@ -507,7 +509,10 @@ class MainScreen(Screen):
             else:
                 self.action_open_models()
 
-        elif cmd in ("/model", "/connect"):
+        elif cmd == "/connect":
+            self.action_open_connect()
+
+        elif cmd == "/model":
             if args:
                 model_name = args[0]
                 if self.engine and self.engine.config:
@@ -562,7 +567,22 @@ class MainScreen(Screen):
 
     # ─── Modal Actions ───
 
-    def action_open_models(self) -> None:
+    def _dismiss_active_modals(self) -> None:
+        """Pop any currently active modal screen so only one modal is shown at a time."""
+        from textual.screen import ModalScreen
+        while len(self.app.screen_stack) > 1 and isinstance(self.app.screen, ModalScreen):
+            self.app.pop_screen()
+
+    def action_open_connect(self) -> None:
+        def on_connect_done(result: dict[str, str] | None) -> None:
+            if result and isinstance(result, dict) and result.get("action") == "open_models":
+                target_pid = result.get("provider_id")
+                self.action_open_models(initial_provider=target_pid)
+
+        self._dismiss_active_modals()
+        self.app.push_screen(ConnectModal(engine=self.engine), on_connect_done)
+
+    def action_open_models(self, initial_provider: str | None = None) -> None:
         async def on_model_selected(model_info: dict[str, str] | None) -> None:
             if model_info and self.engine and self.engine.config:
                 new_model = model_info["id"]
@@ -583,7 +603,11 @@ class MainScreen(Screen):
                 self.engine.config.save()
                 self.update_engine_status()
 
-        self.app.push_screen(ModelModal(engine=self.engine), on_model_selected)
+        self._dismiss_active_modals()
+        self.app.push_screen(
+            ModelModal(engine=self.engine, initial_provider=initial_provider),
+            on_model_selected,
+        )
 
     def action_open_sessions(self) -> None:
         def on_session_selected(session_id: str | None) -> None:
@@ -601,15 +625,19 @@ class MainScreen(Screen):
                         self.engine.session = Session(session_id=session_id, engine=self.engine)
                     self.load_session_history(session_id)
 
+        self._dismiss_active_modals()
         self.app.push_screen(SessionModal(engine=self.engine), on_session_selected)
 
     def action_open_help(self) -> None:
+        self._dismiss_active_modals()
         self.app.push_screen(HelpModal())
 
     def action_open_mcps(self) -> None:
+        self._dismiss_active_modals()
         self.app.push_screen(MCPModal(engine=self.engine))
 
     def action_open_config(self) -> None:
+        self._dismiss_active_modals()
         self.app.push_screen(ConfigModal(engine=self.engine))
 
     async def action_new_session(self) -> None:
@@ -619,6 +647,7 @@ class MainScreen(Screen):
         await self.handle_slash_command("/clear")
 
     def action_open_debug(self) -> None:
+        self._dismiss_active_modals()
         self.app.push_screen(
             DebugModal(
                 engine=self.engine,
@@ -628,5 +657,6 @@ class MainScreen(Screen):
         )
 
     def action_open_theme(self) -> None:
+        self._dismiss_active_modals()
         self.app.push_screen(ThemeModal(engine=self.engine))
 
