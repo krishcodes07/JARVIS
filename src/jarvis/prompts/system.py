@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,9 @@ class SystemPromptBuilder:
             Complete system prompt string.
         """
         parts = [persona]
+        date = datetime.now().strftime("%Y-%m-%d")
 
+        parts.append(f"\n## Current Date\n{date}, always refer to this date only, dont use any previous year or anthing for your responses")
         if capability_summary:
             parts.append(f"\n## Capabilities & Tool Discovery\n{capability_summary}")
 

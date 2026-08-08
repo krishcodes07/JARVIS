@@ -1,8 +1,10 @@
-﻿"""
+"""
 Send message tool for Telegram User Account (MTProto).
 Sends messages directly from your personal Telegram user account.
 """
 
+
+from typing import Any
 
 from ..client import get_telegram_client, run_async
 
@@ -29,9 +31,14 @@ async def _send_user_message(recipient: str, text: str, reply_to_id: int | None 
         # Convert numeric ID strings if applicable
         target = int(recipient) if (recipient.isdigit() or (recipient.startswith("-") and recipient[1:].isdigit())) else recipient
 
-        sent_msg = await client.send_message(target, text, reply_to=reply_to_id)
+        if reply_to_id is not None:
+            sent_msg = await client.send_message(target, text, reply_to=reply_to_id)
+        else:
+            sent_msg = await client.send_message(target, text)
         await client.disconnect()
-        return f"[OK] Message sent from your Telegram account to '{recipient}' (Message ID: {sent_msg.id})."
+        msg_obj: Any = sent_msg[0] if isinstance(sent_msg, list) else sent_msg
+        msg_id = getattr(msg_obj, "id", "unknown")
+        return f"[OK] Message sent from your Telegram account to '{recipient}' (Message ID: {msg_id})."
     except Exception as e:
         await client.disconnect()
         return f"Error: Failed to send Telegram message to '{recipient}': {e}"

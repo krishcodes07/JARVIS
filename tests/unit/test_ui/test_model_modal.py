@@ -44,3 +44,38 @@ def test_model_modal_only_provider_filter():
         assert item["provider"] == "opencode"
     assert modal.dialog._title_text.startswith("Select OpenCode")
 
+
+def test_model_modal_ctrl_a_action_open_connect():
+    engine = JarvisEngine()
+    modal = ModelModal(engine=engine)
+
+    dismissed = False
+
+    def mock_dismiss(result=None):
+        nonlocal dismissed
+        dismissed = True
+
+    modal.dismiss = mock_dismiss
+
+    called_target = False
+
+    class DummyMainScreen:
+        def action_open_connect(self):
+            nonlocal called_target
+            called_target = True
+
+    dummy_main = DummyMainScreen()
+
+    class DummyApp:
+        screen_stack = [dummy_main, modal]
+
+        def set_timer(self, delay, callback):
+            callback()
+
+    modal._app = DummyApp()  # type: ignore[attr-defined]
+
+    modal.action_open_connect()
+    assert dismissed is True
+    assert called_target is True
+
+

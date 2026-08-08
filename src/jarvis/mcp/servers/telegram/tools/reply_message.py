@@ -3,6 +3,8 @@ Reply to message tool for Telegram User Account (MTProto).
 Allows replying directly to a specific message in a chat by message ID.
 """
 
+from typing import Any
+
 from ..client import get_telegram_client, run_async
 
 NAME = "reply_message"
@@ -24,7 +26,9 @@ async def _reply_to_user_message(chat_id: str, message_id: int, text: str) -> st
 
         sent_msg = await client.send_message(target, text, reply_to=msg_id)
         await client.disconnect()
-        return f"[OK] Replied to message ID {msg_id} in '{chat_id}' (New Message ID: {sent_msg.id})."
+        msg_obj: Any = sent_msg[0] if isinstance(sent_msg, list) else sent_msg
+        new_msg_id = getattr(msg_obj, "id", "unknown")
+        return f"[OK] Replied to message ID {msg_id} in '{chat_id}' (New Message ID: {new_msg_id})."
 
     except Exception as e:
         await client.disconnect()

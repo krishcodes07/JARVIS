@@ -36,8 +36,10 @@ async def _get_user_contacts(limit: int = 50) -> str:
             first = getattr(u, "first_name", "") or ""
             last = getattr(u, "last_name", "") or ""
             full_name = f"{first} {last}".strip() or "Unnamed Contact"
-            username = f"@{u.username}" if getattr(u, "username", None) else "N/A"
-            phone = f"+{u.phone}" if getattr(u, "phone", None) else "Hidden"
+            u_username = getattr(u, "username", None)
+            username = f"@{u_username}" if u_username else "N/A"
+            u_phone = getattr(u, "phone", None)
+            phone = f"+{u_phone}" if u_phone else "Hidden"
             user_id = u.id
 
             output.append(f"  • {full_name} | Username: {username} | Phone: {phone} | User ID: {user_id}")

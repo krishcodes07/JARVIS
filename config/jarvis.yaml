@@ -4,8 +4,8 @@ jarvis:
   persona: professional_assistant
   log_level: INFO
 provider:
-  active: kilo
-  model: tencent/hy3:free
+  active: opencode
+  model: mimo-v2.5-free
   temperature: 0.7
   max_tokens: 16000
   top_p: 1.0

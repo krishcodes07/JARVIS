@@ -137,44 +137,32 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
 
         handle_search_key_navigation(event, self.search_input, self.option_list)
 
+    def _safe_get_app(self) -> Any | None:
+        try:
+            return self.app
+        except Exception:
+            return getattr(self, "_app", None)
+
     def action_open_connect(self) -> None:
-        from jarvis.ui.tui.screens.modals.api_key_modal import ApiKeyModal
-        from jarvis.ui.tui.screens.modals.connect_modal import ConnectModal
-
-        def on_connect_done(selected_provider: dict[str, Any] | None) -> None:
-            if selected_provider and isinstance(selected_provider, dict) and "id" in selected_provider:
-                prov_id = selected_provider["id"]
-                prov_name = selected_provider["name"]
-                api_key_env = selected_provider.get("api_key_env") or f"{prov_id.upper()}_API_KEY"
-
-                def on_api_key_done(saved_provider_id: str | None) -> None:
-                    if saved_provider_id:
-                        screen = getattr(self.app, "screen", None)
-                        if screen and hasattr(screen, "action_open_models"):
-                            screen.action_open_models(only_provider=saved_provider_id)
-                        elif hasattr(self.app, "action_open_models"):
-                            self.app.action_open_models(only_provider=saved_provider_id)
-
-                def open_api_key_screen() -> None:
-                    screen = getattr(self.app, "screen", None)
-                    app_obj = screen if screen and hasattr(screen, "push_screen") else self.app
-                    app_obj.push_screen(
-                        ApiKeyModal(
-                            provider_id=prov_id,
-                            provider_name=prov_name,
-                            api_key_env=api_key_env,
-                            engine=self.engine,
-                        ),
-                        on_api_key_done,
-                    )
-
-                if hasattr(self.app, "set_timer"):
-                    self.app.set_timer(0.05, open_api_key_screen)
-                else:
-                    open_api_key_screen()
-
+        """Dismiss current ModelModal and delegate provider connection flow to main screen."""
         self.dismiss(None)
-        self.app.push_screen(ConnectModal(engine=self.engine), on_connect_done)
+        app = self._safe_get_app()
+        target_screen = None
+        if app and hasattr(app, "screen_stack"):
+            for s in reversed(app.screen_stack):
+                if s != self and hasattr(s, "action_open_connect"):
+                    target_screen = s
+                    break
+        if target_screen:
+            if hasattr(app, "set_timer"):
+                app.set_timer(0.05, target_screen.action_open_connect)
+            else:
+                target_screen.action_open_connect()
+        elif app and hasattr(app, "action_open_connect"):
+            if hasattr(app, "set_timer"):
+                app.set_timer(0.05, app.action_open_connect)
+            else:
+                app.action_open_connect()
 
     def _get_active_provider(self) -> str:
         if self.engine and self.engine.config and self.engine.config.provider:

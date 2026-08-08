@@ -6,12 +6,14 @@ Allows sending and reading messages from your personal Telegram user account.
 import asyncio
 import os
 from collections.abc import Callable, Coroutine
-from typing import Any
+from typing import Any, TypeVar
 
 from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 from .config import get_credentials
+
+T = TypeVar("T")
 
 
 def get_telegram_client() -> TelegramClient:
@@ -36,7 +38,7 @@ def get_telegram_client() -> TelegramClient:
     return TelegramClient(session, int(api_id), api_hash)
 
 
-def run_async(coro_fn: Callable[..., Coroutine[Any, Any, Any]], *args, **kwargs) -> Any:
+def run_async(coro_fn: Callable[..., Coroutine[Any, Any, T]], *args: Any, **kwargs: Any) -> T:
     """Execute an async Telethon function in a fresh or existing event loop."""
     try:
         loop = asyncio.get_event_loop()
