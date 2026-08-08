@@ -170,7 +170,7 @@ class MCPServerOverride(BaseModel):
 
 class TUIConfig(BaseModel):
     """TUI settings."""
-    theme: str = "dark"
+    theme: str = "jarvis"
     show_tool_output: bool = True
     show_thinking: bool = False
 

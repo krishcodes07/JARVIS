@@ -36,6 +36,13 @@ class JarvisTUIApp(App):
         self.engine = engine
 
     def on_mount(self) -> None:
+        from jarvis.ui.tui.theme import register_all_themes, apply_theme
+        register_all_themes(self)
+        if self.engine and self.engine.config and self.engine.config.ui:
+            active_theme = self.engine.config.ui.tui.theme
+            apply_theme(self, active_theme)
+        else:
+            apply_theme(self, "jarvis")
         self.push_screen(MainScreen(engine=self.engine))
 
 

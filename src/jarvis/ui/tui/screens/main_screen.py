@@ -25,7 +25,9 @@ from jarvis.ui.tui.screens.modals import (
     MCPModal,
     ModelModal,
     SessionModal,
+    ThemeModal,
 )
+from jarvis.ui.tui.utils import copy_to_clipboard
 from jarvis.ui.tui.voice_controller import VoiceSessionController
 from jarvis.ui.tui.widgets import (
     ChatViewWidget,
@@ -419,10 +421,24 @@ class MainScreen(Screen):
             "/config": self.action_open_config,
             "/debug": self.action_open_debug,
             "/voice": self.action_toggle_voice,
+            "/theme": self.action_open_theme,
         }
 
         if cmd in modal_handlers:
-            modal_handlers[cmd]()
+            if cmd == "/theme" and args:
+                target_theme = args[0].lower()
+                from jarvis.ui.tui.theme import THEME_REGISTRY, apply_theme, get_theme
+                if target_theme in THEME_REGISTRY:
+                    theme_obj = get_theme(target_theme)
+                    apply_theme(self.app, theme_obj.id)
+                    if self.engine and self.engine.config:
+                        self.engine.config.ui.tui.theme = theme_obj.id
+                        self.engine.config.save()
+                    self.show_toast(f"Switched TUI theme to: {theme_obj.display_name}", title="Theme Switched", style="success")
+                else:
+                    self.action_open_theme()
+            else:
+                modal_handlers[cmd]()
             if cmd == "/voice":
                 status = "enabled (listening)" if self.voice_controller.is_active else "disabled"
                 self.chat_view.add_user_message(f"✓ Hands-free voice mode toggled: {status}")
@@ -472,15 +488,9 @@ class MainScreen(Screen):
                 if getattr(child, "role", "") == "assistant" and hasattr(child, "raw_content"):
                     last_text = child.raw_content
                     break
-            if last_text:
-                try:
-                    import pyperclip  # type: ignore
-                    pyperclip.copy(last_text)
-                    self.show_toast("Copied last AI response to clipboard", title="Clipboard", style="success")
-                except Exception as e:
-                    self.show_toast(f"Could not copy to clipboard: {e}", title="Clipboard Warning", style="warning")
-            else:
-                self.show_toast("No AI response content available to copy", title="Clipboard", style="info")
+            ok, msg = copy_to_clipboard(last_text)
+            style_name = "success" if ok else ("warning" if last_text else "info")
+            self.show_toast(msg, title="Clipboard", style=style_name)
 
         elif cmd == "/provider":
             if args and self.engine and self.engine.provider_manager:
@@ -616,4 +626,7 @@ class MainScreen(Screen):
                 is_voice_active=self.voice_controller.is_active,
             )
         )
+
+    def action_open_theme(self) -> None:
+        self.app.push_screen(ThemeModal(engine=self.engine))
 

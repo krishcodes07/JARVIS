@@ -12,6 +12,8 @@ from rich.text import Text
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
+from jarvis.ui.tui.utils import format_tool_name, truncate_text
+
 
 class MessageWidget(Static):
     """A single chat message or event in the feed with improved spacing."""
@@ -96,7 +98,7 @@ class ToolCallWidget(Static):
         self.output_widget = Static("", classes="tool-output-block")
 
     def _format_header(self) -> Text:
-        formatted_name = self.tool_name.replace("_", " ").title()
+        formatted_name = format_tool_name(self.tool_name)
         t = Text()
         t.append("→ ", style="dim #737373")
         t.append(f"{formatted_name}", style="dim #a3a3a3")
@@ -110,9 +112,7 @@ class ToolCallWidget(Static):
 
     def set_output(self, output_text: str) -> None:
         self.result_text = output_text
-        res = output_text
-        if len(res) > 1000:
-            res = res[:1000] + "\n... (truncated)"
+        res = truncate_text(output_text, max_length=1000, ellipsis="\n... (truncated)")
         t = Text()
         t.append(f"↳ {res}", style="italic #737373")
         self.output_widget.update(t)

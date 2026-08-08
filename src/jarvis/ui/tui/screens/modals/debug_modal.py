@@ -23,7 +23,7 @@ class DebugModal(ModalScreen[None]):
     DEFAULT_CSS = """
     DebugModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.55);
     }
     """
 

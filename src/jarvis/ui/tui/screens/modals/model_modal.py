@@ -15,79 +15,19 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
-from jarvis.core.config import DATA_DIR
+from jarvis.ui.tui.utils import (
+    handle_search_key_navigation,
+    load_models_cache,
+    load_recent_models,
+    save_models_cache,
+    save_recent_model,
+)
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
 
 if TYPE_CHECKING:
     from jarvis.core.engine import JarvisEngine
 
 logger = logging.getLogger(__name__)
-
-CACHE_DIR = DATA_DIR / "cache"
-RECENT_MODELS_PATH = CACHE_DIR / "recent_models.json"
-MODELS_CACHE_PATH = CACHE_DIR / "models_cache.json"
-
-
-def _ensure_cache_dir() -> None:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def load_recent_models() -> list[dict[str, str]]:
-    _ensure_cache_dir()
-    if RECENT_MODELS_PATH.exists():
-        try:
-            with open(RECENT_MODELS_PATH, encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return data[:5]
-        except Exception as e:
-            logger.warning(f"Failed to read recent_models.json: {e}")
-    return []
-
-
-def save_recent_model(model_item: dict[str, str]) -> None:
-    _ensure_cache_dir()
-    recents = load_recent_models()
-    mid = model_item.get("id", "")
-    if not mid:
-        return
-    recents = [m for m in recents if m.get("id") != mid]
-    recents.insert(
-        0,
-        {
-            "id": mid,
-            "name": model_item.get("name", mid),
-            "provider": model_item.get("provider", "").lower(),
-        },
-    )
-    recents = recents[:5]
-    try:
-        with open(RECENT_MODELS_PATH, "w", encoding="utf-8") as f:
-            json.dump(recents, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not save recent model: {e}")
-
-
-def load_models_cache() -> dict[str, list[dict[str, str]]]:
-    _ensure_cache_dir()
-    if MODELS_CACHE_PATH.exists():
-        try:
-            with open(MODELS_CACHE_PATH, encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict):
-                    return data
-        except Exception as e:
-            logger.warning(f"Failed to read models_cache.json: {e}")
-    return {}
-
-
-def save_models_cache(cache_data: dict[str, list[dict[str, str]]]) -> None:
-    _ensure_cache_dir()
-    try:
-        with open(MODELS_CACHE_PATH, "w", encoding="utf-8") as f:
-            json.dump(cache_data, f, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not save models cache: {e}")
 
 
 class ModelModal(ModalScreen[dict[str, str] | None]):
@@ -96,7 +36,7 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
     DEFAULT_CSS = """
     ModelModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.75);
+        background: rgba(0, 0, 0, 0.55);
     }
     """
 
@@ -149,18 +89,7 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
 
     def on_key(self, event) -> None:
         """Delegate arrow keys and Enter from search input to the option list."""
-        if self.search_input and self.search_input.has_focus:
-            if event.key == "up":
-                event.stop()
-                self.option_list.action_cursor_up()
-                self.option_list.scroll_to_highlight()
-            elif event.key == "down":
-                event.stop()
-                self.option_list.action_cursor_down()
-                self.option_list.scroll_to_highlight()
-            elif event.key == "enter":
-                event.stop()
-                self.option_list.action_select()
+        handle_search_key_navigation(event, self.search_input, self.option_list)
 
     def _get_active_provider(self) -> str:
         if self.engine and self.engine.config and self.engine.config.provider:

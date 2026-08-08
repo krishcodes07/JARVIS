@@ -18,7 +18,7 @@ class HelpModal(ModalScreen[None]):
     DEFAULT_CSS = """
     HelpModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.55);
     }
 
     #help-content {

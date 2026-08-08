@@ -15,6 +15,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
+from jarvis.ui.tui.utils import handle_search_key_navigation
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
 
 if TYPE_CHECKING:
@@ -29,7 +30,7 @@ class MCPModal(ModalScreen[None]):
     DEFAULT_CSS = """
     MCPModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.55);
     }
     """
 
@@ -96,18 +97,7 @@ class MCPModal(ModalScreen[None]):
 
     def on_key(self, event) -> None:
         """Delegate arrow keys and Enter from search input to the option list."""
-        if self.search_input and self.search_input.has_focus:
-            if event.key == "up":
-                event.stop()
-                self.option_list.action_cursor_up()
-                self.option_list.scroll_to_highlight()
-            elif event.key == "down":
-                event.stop()
-                self.option_list.action_cursor_down()
-                self.option_list.scroll_to_highlight()
-            elif event.key == "enter":
-                event.stop()
-                self.option_list.action_select()
+        handle_search_key_navigation(event, self.search_input, self.option_list)
 
     def _refresh_servers_data(self) -> None:
         """Build a unified list of all servers with their live status."""

@@ -24,37 +24,19 @@ from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
 from jarvis.core.config import DATA_DIR
+from jarvis.ui.tui.utils import (
+    format_date_group,
+    handle_search_key_navigation,
+    load_pinned_sessions,
+    save_pinned_sessions,
+    truncate_text,
+)
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
 
 if TYPE_CHECKING:
     from jarvis.core.engine import JarvisEngine
 
 logger = logging.getLogger(__name__)
-
-PINNED_SESSIONS_PATH = DATA_DIR / "cache" / "pinned_sessions.json"
-
-
-def _load_pinned_sessions() -> set[str]:
-    """Load set of pinned session IDs from disk."""
-    if PINNED_SESSIONS_PATH.exists():
-        try:
-            with open(PINNED_SESSIONS_PATH, encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, list):
-                    return set(data)
-        except Exception as e:
-            logger.warning(f"Failed to read pinned_sessions.json: {e}")
-    return set()
-
-
-def _save_pinned_sessions(pinned: set[str]) -> None:
-    """Save set of pinned session IDs to disk."""
-    PINNED_SESSIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with open(PINNED_SESSIONS_PATH, "w", encoding="utf-8") as f:
-            json.dump(list(pinned), f, indent=2)
-    except Exception as e:
-        logger.warning(f"Could not save pinned_sessions.json: {e}")
 
 
 from textual import work
@@ -65,7 +47,7 @@ class SessionModal(ModalScreen[str | None]):
     DEFAULT_CSS = """
     SessionModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.55);
     }
     """
 
@@ -79,10 +61,10 @@ class SessionModal(ModalScreen[str | None]):
             height="80%",
             show_search=True,
             search_placeholder="Search sessions...",
-            footer_text="pin ctrl+f   delete ctrl+d   rename ctrl+r (type name in search box)",
+            footer_text="pin ctrl+f   delete ctrl+d   rename ctrl+r",
         )
         self.sessions_data: list[dict] = []
-        self.pinned_sessions: set[str] = _load_pinned_sessions()
+        self.pinned_sessions: set[str] = load_pinned_sessions()
         self._is_loading: bool = True
         self._loading_timer = None
         self._loading_frame: int = 0
@@ -133,18 +115,7 @@ class SessionModal(ModalScreen[str | None]):
 
     def on_key(self, event) -> None:
         """Delegate arrow keys and Enter from search input to the option list."""
-        if self.search_input and self.search_input.has_focus:
-            if event.key == "up":
-                event.stop()
-                self.option_list.action_cursor_up()
-                self.option_list.scroll_to_highlight()
-            elif event.key == "down":
-                event.stop()
-                self.option_list.action_cursor_down()
-                self.option_list.scroll_to_highlight()
-            elif event.key == "enter":
-                event.stop()
-                self.option_list.action_select()
+        handle_search_key_navigation(event, self.search_input, self.option_list)
 
     def _get_highlighted_session_id(self) -> str | None:
         """Get the session ID of the currently highlighted option."""
@@ -202,7 +173,7 @@ class SessionModal(ModalScreen[str | None]):
             # Remove from pinned if it was pinned
             if sid in self.pinned_sessions:
                 self.pinned_sessions.discard(sid)
-                _save_pinned_sessions(self.pinned_sessions)
+                save_pinned_sessions(self.pinned_sessions)
 
             # Refresh
             self.sessions_data = self.load_real_sessions()
@@ -281,7 +252,7 @@ class SessionModal(ModalScreen[str | None]):
         else:
             self.pinned_sessions.add(sid)
 
-        _save_pinned_sessions(self.pinned_sessions)
+        save_pinned_sessions(self.pinned_sessions)
 
         # Refresh to show pin status change
         self.sessions_data = self.load_real_sessions()
@@ -313,12 +284,7 @@ class SessionModal(ModalScreen[str | None]):
         for p in files:
             sid = p.stem
             mtime = datetime.fromtimestamp(p.stat().st_mtime, tz=UTC)
-            date_str = mtime.strftime("%Y-%m-%d")
-            date_group = (
-                "Today"
-                if date_str == today_str
-                else mtime.strftime("%a %b %d %Y")
-            )
+            date_group = format_date_group(mtime, today_str)
 
             title = f"New session - {mtime.strftime('%Y-%m-%dT%H:%M:%S')}"
             try:
@@ -328,18 +294,14 @@ class SessionModal(ModalScreen[str | None]):
                         # Check for explicit session title first
                         for msg in data:
                             if msg.get("role") == "system" and msg.get("_session_title"):
-                                title = msg["_session_title"]
-                                if len(title) > 48:
-                                    title = title[:45] + "..."
+                                title = truncate_text(msg["_session_title"], max_length=48)
                                 break
                         else:
                             # Fall back to first user message
                             for msg in data:
                                 if msg.get("role") == "user" and msg.get("content"):
                                     first_prompt = msg["content"].strip().split("\n")[0]
-                                    if len(first_prompt) > 48:
-                                        first_prompt = first_prompt[:45] + "..."
-                                    title = first_prompt
+                                    title = truncate_text(first_prompt, max_length=48)
                                     break
             except Exception:
                 pass

@@ -6,11 +6,12 @@ Displays location, git branch, and quick navigation hints.
 from __future__ import annotations
 
 import os
-import subprocess
 
 from rich.text import Text
 from textual.app import RenderResult
 from textual.widget import Widget
+
+from jarvis.ui.tui.utils import get_git_branch
 
 
 class TipBarWidget(Widget):
@@ -57,7 +58,7 @@ class StatusBarWidget(Widget):
         self._cached_branch: str = "main"
 
     def on_mount(self) -> None:
-        self._cached_branch = self._get_git_branch()
+        self._cached_branch = get_git_branch()
 
     def set_generating(self, generating: bool) -> None:
         self.is_generating = generating
@@ -101,18 +102,3 @@ class StatusBarWidget(Widget):
 
         txt.append_text(right)
         return txt
-
-    @staticmethod
-    def _get_git_branch() -> str:
-        try:
-            res = subprocess.run(
-                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                capture_output=True,
-                text=True,
-                timeout=2,
-            )
-            if res.returncode == 0:
-                return res.stdout.strip()
-        except Exception:
-            pass
-        return "main"

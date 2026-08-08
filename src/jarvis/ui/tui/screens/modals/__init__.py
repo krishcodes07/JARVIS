@@ -10,6 +10,7 @@ from jarvis.ui.tui.screens.modals.help_modal import HelpModal
 from jarvis.ui.tui.screens.modals.mcp_modal import MCPModal
 from jarvis.ui.tui.screens.modals.model_modal import ModelModal
 from jarvis.ui.tui.screens.modals.session_modal import SessionModal
+from jarvis.ui.tui.screens.modals.theme_modal import ThemeModal
 
 __all__ = [
     "CommandModal",
@@ -20,5 +21,6 @@ __all__ = [
     "MCPModal",
     "ModelModal",
     "SessionModal",
+    "ThemeModal",
 ]
 

@@ -23,7 +23,7 @@ class ConfigModal(ModalScreen[None]):
     DEFAULT_CSS = """
     ConfigModal {
         align: center middle;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(0, 0, 0, 0.55);
     }
     """
 

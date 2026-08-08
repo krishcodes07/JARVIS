@@ -18,6 +18,15 @@ from textual.widgets import Input, OptionList, Static
 class ModalOptionList(OptionList):
     """Custom OptionList for ModalDialog that keeps the highlighted item cleanly in view."""
 
+    DEFAULT_CSS = """
+    ModalOptionList {
+        height: 1fr;
+        min-height: 6;
+        background: transparent;
+        border: none;
+    }
+    """
+
     def scroll_to_highlight(self, top: bool = False) -> None:
         highlighted = self.highlighted
         if highlighted is None or not self.is_mounted:
@@ -45,7 +54,7 @@ class ModalDialog(Vertical):
 
     DEFAULT_CSS = """
     ModalDialog {
-        background: #1a1a1a;
+        background: $surface;
         border: none;
         padding: 1 2;
         max-height: 80%;
@@ -70,7 +79,7 @@ class ModalDialog(Vertical):
     }
 
     ModalDialog .modal-search {
-        background: #111111;
+        background: transparent;
         border: solid #333333;
         margin: 1 0 0 0;
         color: #ffffff;
@@ -80,7 +89,7 @@ class ModalDialog(Vertical):
 
     ModalDialog .modal-search:focus {
         border: solid #3b82f6;
-        background: #111111;
+        background: transparent;
         color: #ffffff;
     }
 
@@ -92,23 +101,24 @@ class ModalDialog(Vertical):
 
     ModalDialog .modal-list {
         height: 1fr;
+        min-height: 6;
         background: transparent;
         border: none;
         scrollbar-size: 0 0;
     }
 
-    /* Orange highlight for keyboard-navigated item */
     ModalDialog .modal-list > .option-list--option-highlighted {
-        background: #f97316 20%;
-        color: #ffffff;
+        background: $primary 20%;
+        color: $foreground;
+        text-style: bold;
     }
 
     ModalDialog .modal-list > .option-list--option-hover {
-        background: #f97316 15%;
+        background: $primary 15%;
     }
 
     ModalDialog .modal-list > .option-list--option-highlighted-no-highlight {
-        background: #f97316 20%;
+        background: $primary 20%;
     }
 
     ModalDialog .modal-footer {
