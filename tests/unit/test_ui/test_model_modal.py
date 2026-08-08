@@ -33,3 +33,14 @@ def test_model_modal_safe_config_access():
     assert dismissed_result is not None
     assert dismissed_result["id"] == "custom-model-id"
     assert dismissed_result["provider"] == "groq"
+
+
+def test_model_modal_only_provider_filter():
+    engine = JarvisEngine()
+    modal = ModelModal(engine=engine, only_provider="opencode")
+    data = modal._build_models_data()
+    assert isinstance(data, list)
+    for item in data:
+        assert item["provider"] == "opencode"
+    assert modal.dialog._title_text.startswith("Select OpenCode")
+

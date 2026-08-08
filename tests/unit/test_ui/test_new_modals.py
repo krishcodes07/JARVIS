@@ -51,3 +51,11 @@ def test_slash_command_new_registration():
     assert len(filtered) == 1
     assert filtered[0].name == "/new"
 
+
+def test_main_screen_action_open_connect_signature():
+    from jarvis.ui.tui.screens.main_screen import MainScreen
+    screen = MainScreen(engine=None)
+    assert hasattr(screen, "action_open_connect")
+    assert hasattr(screen, "action_open_models")
+
+

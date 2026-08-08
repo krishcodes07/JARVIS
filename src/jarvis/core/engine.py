@@ -632,6 +632,10 @@ class JarvisEngine:
                         "type": "function",
                         "function": {"name": "", "arguments": ""},
                     }
+                sig = tc.get("thought_signature") or tc.get("thoughtSignature")
+                if sig:
+                    accumulated[index]["thought_signature"] = sig
+
                 fn = tc.get("function", {})
                 if fn.get("name"):
                     accumulated[index]["function"]["name"] += fn["name"]

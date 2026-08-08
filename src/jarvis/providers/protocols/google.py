@@ -164,16 +164,90 @@ class GoogleProvider(BaseProvider):
     # ─── Private helpers ──────────────────────────────────────
 
     def _clean_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
-        """Convert schema type strings to uppercase and clean for Google OpenAPI specs."""
+        """Convert JSON schema to Google Gemini OpenAPI spec format.
+
+        Google's REST API for Schema (google.ai.generativelanguage.v1beta.Schema) only accepts
+        specific fields: type, format, description, nullable, enum, maxItems, minItems,
+        properties, required, items, propertyOrdering.
+        Unrecognized fields (like additionalProperties, $schema, title, default, etc.) will
+        cause Google API to return 400 Bad Request ("Unknown name...").
+        """
         if not isinstance(schema, dict):
-            return schema
+            return {}
+
+        schema_copy = dict(schema)
+
+        # Handle anyOf / oneOf (e.g. Pydantic Optional fields: [{"type": "string"}, {"type": "null"}])
+        is_nullable = schema_copy.get("nullable", False)
+        for combo_key in ("anyOf", "oneOf"):
+            if combo_key in schema_copy and isinstance(schema_copy[combo_key], list):
+                subschemas = schema_copy.pop(combo_key)
+                non_null = []
+                for sub in subschemas:
+                    if isinstance(sub, dict):
+                        if sub.get("type") == "null":
+                            is_nullable = True
+                        else:
+                            non_null.append(sub)
+                if non_null:
+                    merged = dict(non_null[0])
+                    merged.update(schema_copy)
+                    schema_copy = merged
+                if is_nullable:
+                    schema_copy["nullable"] = True
+
+        # Handle allOf
+        if "allOf" in schema_copy and isinstance(schema_copy["allOf"], list):
+            subschemas = schema_copy.pop("allOf")
+            for sub in subschemas:
+                if isinstance(sub, dict):
+                    merged = dict(sub)
+                    merged.update(schema_copy)
+                    schema_copy = merged
+
+        # Allowed keys in Google Generative AI Schema proto
+        allowed_keys = {
+            "type",
+            "format",
+            "description",
+            "nullable",
+            "enum",
+            "maxItems",
+            "minItems",
+            "properties",
+            "required",
+            "items",
+            "propertyOrdering",
+        }
 
         cleaned: dict[str, Any] = {}
-        for k, v in schema.items():
-            if k in ("$schema", "title"):
+
+        # Handle type list e.g. ["string", "null"]
+        raw_type = schema_copy.get("type")
+        if isinstance(raw_type, list):
+            types = [t for t in raw_type if t != "null"]
+            if "null" in raw_type:
+                schema_copy["nullable"] = True
+            schema_copy["type"] = types[0] if types else "string"
+
+        for k, v in schema_copy.items():
+            if k not in allowed_keys:
                 continue
+
             if k == "type" and isinstance(v, str):
                 cleaned[k] = v.upper()
+            elif k == "properties" and isinstance(v, dict):
+                cleaned[k] = {
+                    prop_name: self._clean_schema(prop_schema)
+                    for prop_name, prop_schema in v.items()
+                    if isinstance(prop_schema, dict)
+                }
+            elif k == "items" and isinstance(v, dict):
+                cleaned[k] = self._clean_schema(v)
+            elif k == "enum" and isinstance(v, list):
+                cleaned[k] = [str(x) for x in v]
+            elif k == "required" and isinstance(v, list):
+                cleaned[k] = [str(x) for x in v if isinstance(x, str)]
             elif isinstance(v, dict):
                 cleaned[k] = self._clean_schema(v)
             elif isinstance(v, list):
@@ -181,8 +255,10 @@ class GoogleProvider(BaseProvider):
             else:
                 cleaned[k] = v
 
-        if "type" not in cleaned:
-            cleaned["type"] = "OBJECT"
+        if "properties" in cleaned or ("type" not in cleaned and "items" not in cleaned):
+            cleaned.setdefault("type", "OBJECT")
+        elif "items" in cleaned and "type" not in cleaned:
+            cleaned["type"] = "ARRAY"
 
         return cleaned
 
@@ -229,12 +305,25 @@ class GoogleProvider(BaseProvider):
                                 args = {"input": args_raw}
                         else:
                             args = args_raw or {}
-                        parts.append({
-                            "functionCall": {
-                                "name": fn_name,
-                                "args": args,
-                            }
-                        })
+
+                        sig = (
+                            tc.get("thought_signature")
+                            or tc.get("thoughtSignature")
+                            or fn.get("thought_signature")
+                            or fn.get("thoughtSignature")
+                        )
+
+                        fc_obj: dict[str, Any] = {
+                            "name": fn_name,
+                            "args": args,
+                        }
+                        part_dict: dict[str, Any] = {
+                            "functionCall": fc_obj
+                        }
+                        if sig:
+                            part_dict["thoughtSignature"] = sig
+
+                        parts.append(part_dict)
 
                 text = msg.content if isinstance(msg.content, str) else str(msg.content)
                 if text:
@@ -287,6 +376,17 @@ class GoogleProvider(BaseProvider):
 
         return payload
 
+    def _extract_thought_signature(
+        self, part: dict[str, Any], fc: dict[str, Any]
+    ) -> str | None:
+        """Extract thought_signature / thoughtSignature if present."""
+        return (
+            part.get("thought_signature")
+            or part.get("thoughtSignature")
+            or fc.get("thought_signature")
+            or fc.get("thoughtSignature")
+        )
+
     def _parse_response(self, data: dict[str, Any]) -> GenerationResponse:
         """Parse Google API response into normalized format."""
         candidates = data.get("candidates", [])
@@ -302,14 +402,18 @@ class GoogleProvider(BaseProvider):
                 content_parts.append(part["text"])
             elif "functionCall" in part:
                 fc = part["functionCall"]
-                tool_calls.append({
+                sig = self._extract_thought_signature(part, fc)
+                tc_dict: dict[str, Any] = {
                     "id": f"call_{fc['name']}",
                     "type": "function",
                     "function": {
                         "name": fc["name"],
                         "arguments": json.dumps(fc.get("args", {})),
                     },
-                })
+                }
+                if sig:
+                    tc_dict["thought_signature"] = sig
+                tool_calls.append(tc_dict)
 
         usage_meta = data.get("usageMetadata", {})
 
@@ -317,7 +421,7 @@ class GoogleProvider(BaseProvider):
             content="\n".join(content_parts),
             role="assistant",
             tool_calls=tool_calls,
-            finish_reason=candidate.get("finishReason", "").lower(),
+            finish_reason=candidate.get("finishReason", "").lower() if candidate.get("finishReason") else None,
             usage={
                 "prompt_tokens": usage_meta.get("promptTokenCount", 0),
                 "completion_tokens": usage_meta.get("candidatesTokenCount", 0),
@@ -339,14 +443,18 @@ class GoogleProvider(BaseProvider):
                 text += part["text"]
             elif "functionCall" in part:
                 fc = part["functionCall"]
-                tool_calls.append({
+                sig = self._extract_thought_signature(part, fc)
+                tc_dict: dict[str, Any] = {
                     "id": f"call_{fc['name']}",
                     "type": "function",
                     "function": {
                         "name": fc["name"],
                         "arguments": json.dumps(fc.get("args", {})),
                     },
-                })
+                }
+                if sig:
+                    tc_dict["thought_signature"] = sig
+                tool_calls.append(tc_dict)
 
         finish_reason = candidates[0].get("finishReason")
         return StreamChunk(

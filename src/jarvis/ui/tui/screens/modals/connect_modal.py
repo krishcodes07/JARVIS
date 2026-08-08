@@ -185,21 +185,7 @@ class ConnectModal(ModalScreen[dict[str, str] | None]):
         if not found:
             return
 
-        # Open API Key entry popup screen
-        def on_api_key_done(key_result: str | None) -> None:
-            if key_result and hasattr(self.app, "action_open_models"):
-                self.app.action_open_models(initial_provider=found["id"])
-
-        self.dismiss(None)
-        self.app.push_screen(
-            ApiKeyModal(
-                provider_id=found["id"],
-                provider_name=found["name"],
-                api_key_env=found["api_key_env"],
-                engine=self.engine,
-            ),
-            on_api_key_done,
-        )
+        self.dismiss(found)
 
     def key_escape(self) -> None:
         self.dismiss(None)

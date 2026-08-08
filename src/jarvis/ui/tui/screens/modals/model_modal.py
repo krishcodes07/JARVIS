@@ -44,13 +44,23 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
         self,
         engine: JarvisEngine | None = None,
         initial_provider: str | None = None,
+        only_provider: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.engine = engine
         self.target_scroll_provider: str | None = initial_provider
+        self.only_provider: str | None = only_provider.strip().lower() if only_provider else None
+
+        title_text = "Select model"
+        if self.only_provider:
+            cache = load_models_dev_cache()
+            pdata = cache.get(self.only_provider) or {}
+            prov_disp = pdata.get("name") or self.only_provider.title()
+            title_text = f"Select {prov_disp} model"
+
         self.dialog = ModalDialog(
-            title="Select model",
+            title=title_text,
             dialog_id="model-dialog",
             width=62,
             height="80%",
@@ -128,13 +138,40 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
         handle_search_key_navigation(event, self.search_input, self.option_list)
 
     def action_open_connect(self) -> None:
+        from jarvis.ui.tui.screens.modals.api_key_modal import ApiKeyModal
         from jarvis.ui.tui.screens.modals.connect_modal import ConnectModal
 
-        def on_connect_done(res: dict[str, str] | None) -> None:
-            if res and isinstance(res, dict) and res.get("action") == "open_models":
-                target_pid = res.get("provider_id")
-                if hasattr(self.app, "action_open_models"):
-                    self.app.action_open_models(initial_provider=target_pid)
+        def on_connect_done(selected_provider: dict[str, Any] | None) -> None:
+            if selected_provider and isinstance(selected_provider, dict) and "id" in selected_provider:
+                prov_id = selected_provider["id"]
+                prov_name = selected_provider["name"]
+                api_key_env = selected_provider.get("api_key_env") or f"{prov_id.upper()}_API_KEY"
+
+                def on_api_key_done(saved_provider_id: str | None) -> None:
+                    if saved_provider_id:
+                        screen = getattr(self.app, "screen", None)
+                        if screen and hasattr(screen, "action_open_models"):
+                            screen.action_open_models(only_provider=saved_provider_id)
+                        elif hasattr(self.app, "action_open_models"):
+                            self.app.action_open_models(only_provider=saved_provider_id)
+
+                def open_api_key_screen() -> None:
+                    screen = getattr(self.app, "screen", None)
+                    app_obj = screen if screen and hasattr(screen, "push_screen") else self.app
+                    app_obj.push_screen(
+                        ApiKeyModal(
+                            provider_id=prov_id,
+                            provider_name=prov_name,
+                            api_key_env=api_key_env,
+                            engine=self.engine,
+                        ),
+                        on_api_key_done,
+                    )
+
+                if hasattr(self.app, "set_timer"):
+                    self.app.set_timer(0.05, open_api_key_screen)
+                else:
+                    open_api_key_screen()
 
         self.dismiss(None)
         self.app.push_screen(ConnectModal(engine=self.engine), on_connect_done)
@@ -170,11 +207,37 @@ class ModelModal(ModalScreen[dict[str, str] | None]):
                 if pdef.is_connected and pid.lower() not in connected_providers:
                     connected_providers[pid.lower()] = pdef.raw
 
-        # 1. Recent Models (only for connected providers)
+        # If only_provider filter is specified (e.g. right after connecting a provider)
+        if self.only_provider:
+            filter_key = self.only_provider.strip().lower()
+            matching_key = next((k for k in connected_providers if k == filter_key), None)
+
+            if not matching_key:
+                matching_key = next(
+                    (k for k in connected_providers if k.startswith(filter_key) or filter_key.startswith(k)),
+                    None,
+                )
+
+            if not matching_key:
+                for pid, pdata in cache.items():
+                    if pid.lower() == filter_key:
+                        connected_providers[pid.lower()] = pdata
+                        matching_key = pid.lower()
+                        break
+
+            if matching_key:
+                connected_providers = {matching_key: connected_providers[matching_key]}
+            elif filter_key in cache:
+                connected_providers = {filter_key: cache[filter_key]}
+
+        # 1. Recent Models (only for connected providers, and match only_provider if specified)
         if recent_list:
             for item in recent_list[:5]:
                 mid = item.get("id", "")
                 mprov = item.get("provider", "").lower()
+                if self.only_provider:
+                    if mprov != self.only_provider and self.only_provider not in mprov:
+                        continue
                 if mprov in connected_providers or not connected_providers:
                     all_entries.append({
                         "id": mid,

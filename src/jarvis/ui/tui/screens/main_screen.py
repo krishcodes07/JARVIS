@@ -9,7 +9,7 @@ import asyncio
 import contextlib
 import json
 import logging
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from textual import events, on, work
 from textual.binding import Binding, BindingType
@@ -19,6 +19,7 @@ from textual.worker import get_current_worker
 
 from jarvis.core.config import DATA_DIR
 from jarvis.ui.tui.screens.modals import (
+    ApiKeyModal,
     ConfigModal,
     ConnectModal,
     DebugModal,
@@ -574,15 +575,37 @@ class MainScreen(Screen):
             self.app.pop_screen()
 
     def action_open_connect(self) -> None:
-        def on_connect_done(result: dict[str, str] | None) -> None:
-            if result and isinstance(result, dict) and result.get("action") == "open_models":
-                target_pid = result.get("provider_id")
-                self.action_open_models(initial_provider=target_pid)
+        def on_connect_done(selected_provider: dict[str, Any] | None) -> None:
+            if selected_provider and isinstance(selected_provider, dict) and "id" in selected_provider:
+                prov_id = selected_provider["id"]
+                prov_name = selected_provider["name"]
+                api_key_env = selected_provider.get("api_key_env") or f"{prov_id.upper()}_API_KEY"
+
+                def on_api_key_done(saved_provider_id: str | None) -> None:
+                    if saved_provider_id:
+                        self.action_open_models(only_provider=saved_provider_id)
+
+                def open_api_key_screen() -> None:
+                    self.app.push_screen(
+                        ApiKeyModal(
+                            provider_id=prov_id,
+                            provider_name=prov_name,
+                            api_key_env=api_key_env,
+                            engine=self.engine,
+                        ),
+                        on_api_key_done,
+                    )
+
+                self.set_timer(0.05, open_api_key_screen)
 
         self._dismiss_active_modals()
         self.app.push_screen(ConnectModal(engine=self.engine), on_connect_done)
 
-    def action_open_models(self, initial_provider: str | None = None) -> None:
+    def action_open_models(
+        self,
+        initial_provider: str | None = None,
+        only_provider: str | None = None,
+    ) -> None:
         async def on_model_selected(model_info: dict[str, str] | None) -> None:
             if model_info and self.engine and self.engine.config:
                 new_model = model_info["id"]
@@ -603,11 +626,22 @@ class MainScreen(Screen):
                 self.engine.config.save()
                 self.update_engine_status()
 
-        self._dismiss_active_modals()
-        self.app.push_screen(
-            ModelModal(engine=self.engine, initial_provider=initial_provider),
-            on_model_selected,
-        )
+        def do_push() -> None:
+            self._dismiss_active_modals()
+            self.app.push_screen(
+                ModelModal(
+                    engine=self.engine,
+                    initial_provider=initial_provider,
+                    only_provider=only_provider,
+                ),
+                on_model_selected,
+            )
+
+        from textual.screen import ModalScreen
+        if isinstance(self.app.screen, ModalScreen):
+            self.set_timer(0.05, do_push)
+        else:
+            do_push()
 
     def action_open_sessions(self) -> None:
         def on_session_selected(session_id: str | None) -> None:

@@ -4,8 +4,8 @@ jarvis:
   persona: professional_assistant
   log_level: INFO
 provider:
-  active: google
-  model: gemini-3.5-flash
+  active: openrouter
+  model: poolside/laguna-xs-2.1:free
   temperature: 0.7
   max_tokens: 16000
   top_p: 1.0
@@ -74,7 +74,7 @@ mcp:
 voice:
   enabled: true
   mode: voice
-  auto_send_msg: false
+  auto_send_msg: true
   tts:
     provider: edge_tts
     voice: en-GB-RyanNeural
@@ -103,7 +103,7 @@ voice:
 ui:
   default: tui
   tui:
-    theme: mercury
+    theme: jarvis
     show_tool_output: true
     show_thinking: false
   web:

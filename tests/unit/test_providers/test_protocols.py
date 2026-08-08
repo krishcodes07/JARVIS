@@ -68,21 +68,71 @@ def test_google_provider_format_contents():
     }
 
 
+def test_google_provider_thought_signature():
+    google_p = GoogleProvider(api_key="test", base_url="https://generativelanguage.googleapis.com/v1beta")
+
+    raw_response = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "functionCall": {"name": "list_directory", "args": {"path": "D:\\coding"}},
+                            "thought_signature": "sig_abc123token",
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    parsed = google_p._parse_response(raw_response)
+    assert len(parsed.tool_calls) == 1
+    assert parsed.tool_calls[0]["thought_signature"] == "sig_abc123token"
+
+    # Now verify _format_contents retains thought_signature
+    messages = [
+        Message(
+            role="assistant",
+            content="",
+            tool_calls=parsed.tool_calls,
+        )
+    ]
+
+    _, contents = google_p._format_contents(messages)
+    assert len(contents) == 1
+    assert contents[0]["parts"][0]["thoughtSignature"] == "sig_abc123token"
+    assert "thought_signature" not in contents[0]["parts"][0]["functionCall"]
+
+
 def test_google_provider_clean_schema():
     google_p = GoogleProvider(api_key="test", base_url="https://generativelanguage.googleapis.com/v1beta")
 
     schema = {
         "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "search_tool",
         "type": "object",
+        "additionalProperties": False,
         "properties": {
-            "query": {"type": "string", "title": "Query String"}
+            "query": {"type": "string", "title": "Query String", "default": "hello"},
+            "opt": {
+                "anyOf": [{"type": "integer"}, {"type": "null"}],
+                "description": "optional number",
+            },
         },
     }
 
     cleaned = google_p._clean_schema(schema)
 
     assert "$schema" not in cleaned
+    assert "title" not in cleaned
+    assert "additionalProperties" not in cleaned
     assert cleaned["type"] == "OBJECT"
+    assert "type" not in cleaned["properties"]
     assert cleaned["properties"]["query"]["type"] == "STRING"
     assert "title" not in cleaned["properties"]["query"]
+    assert "default" not in cleaned["properties"]["query"]
+    assert cleaned["properties"]["opt"]["type"] == "INTEGER"
+    assert cleaned["properties"]["opt"]["nullable"] is True
+
 
