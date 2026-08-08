@@ -145,3 +145,47 @@ def get_provider_protocol(provider_id: str, provider_data: dict[str, Any]) -> Pr
     if clean_id in ("google", "google-vertex", "gemini"):
         return Protocol.GOOGLE
     return Protocol.OPENAI
+
+
+def get_model_context_limit(model_id: str, provider_id: str | None = None) -> int:
+    """Get context window limit for a model from models.dev cache.
+
+    Default fallback: 128,000 tokens if limit is not found in cache.
+    """
+    if not model_id:
+        return 128000
+
+    cache = load_models_dev_cache()
+    if not cache:
+        return 128000
+
+    clean_model_id = model_id
+    if "/" in model_id:
+        parts = model_id.split("/", 1)
+        if not provider_id:
+            provider_id = parts[0]
+        clean_model_id = parts[1]
+
+    # 1. Direct lookup under provider_id if given
+    if provider_id:
+        prov_clean = provider_id.lower()
+        for p_id, p_data in cache.items():
+            if p_id.lower() == prov_clean:
+                models = p_data.get("models", {})
+                for m_key, m_data in models.items():
+                    if m_key.lower() in (model_id.lower(), clean_model_id.lower()):
+                        ctx = m_data.get("limit", {}).get("context")
+                        if isinstance(ctx, (int, float)) and ctx > 0:
+                            return int(ctx)
+
+    # 2. Search across all providers in cache
+    for p_data in cache.values():
+        models = p_data.get("models", {})
+        for m_key, m_data in models.items():
+            if m_key.lower() in (model_id.lower(), clean_model_id.lower()):
+                ctx = m_data.get("limit", {}).get("context")
+                if isinstance(ctx, (int, float)) and ctx > 0:
+                    return int(ctx)
+
+    return 128000
+

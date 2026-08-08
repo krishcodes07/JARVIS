@@ -37,6 +37,23 @@ class TipBarWidget(Widget):
         return txt
 
 
+def format_context_usage(tokens: int, limit: int) -> str:
+    """Format token context usage and percentage, e.g., '5.5k (3%)' or '850 (1%)'."""
+    if limit <= 0:
+        limit = 128000
+
+    if tokens < 1000:
+        tok_str = str(tokens)
+    elif tokens < 100000:
+        tok_str = f"{tokens / 1000:.1f}k"
+    else:
+        tok_str = f"{tokens // 1000}k"
+
+    pct = round((tokens / limit) * 100)
+    pct = max(0, min(100, pct))
+    return f"{tok_str} ({pct}%)"
+
+
 class StatusBarWidget(Widget):
     """Bottom status bar"""
 
@@ -56,12 +73,28 @@ class StatusBarWidget(Widget):
         self.version = version
         self.is_generating: bool = False
         self._cached_branch: str = "main"
+        self.context_tokens: int | None = None
+        self.context_limit: int | None = None
 
     def on_mount(self) -> None:
         self._cached_branch = get_git_branch()
 
     def set_generating(self, generating: bool) -> None:
         self.is_generating = generating
+        if self.is_mounted:
+            self.refresh()
+
+    def set_context_usage(self, tokens: int, limit: int) -> None:
+        """Update context window usage."""
+        self.context_tokens = tokens
+        self.context_limit = limit
+        if self.is_mounted:
+            self.refresh()
+
+    def clear_context_usage(self) -> None:
+        """Clear context window usage display (resets back to tab commands)."""
+        self.context_tokens = None
+        self.context_limit = None
         if self.is_mounted:
             self.refresh()
 
@@ -79,7 +112,12 @@ class StatusBarWidget(Widget):
             left.append(location, style="dim #a3a3a3")
             left_plain_len = len(location) + 2
 
-        right_raw = "tab commands   ctrl+s sessions"
+        if self.context_tokens is not None and self.context_limit is not None:
+            context_str = format_context_usage(self.context_tokens, self.context_limit)
+            right_raw = f"{context_str}   ctrl+s sessions"
+        else:
+            context_str = None
+            right_raw = "tab commands   ctrl+s sessions"
 
         try:
             width = self.size.width if (self.size and self.size.width > 0) else (self.app.size.width - 2)
@@ -94,11 +132,17 @@ class StatusBarWidget(Widget):
         txt.append(" " * gap)
 
         right = Text(no_wrap=True)
-        right.append("tab ", style="bold #ffffff")
-        right.append("commands", style="dim #a3a3a3")
-        right.append("   ")
+        if context_str:
+            right.append(context_str, style="dim #a3a3a3")
+            right.append("   ")
+        else:
+            right.append("tab ", style="bold #ffffff")
+            right.append("commands", style="dim #a3a3a3")
+            right.append("   ")
+
         right.append("ctrl+s ", style="bold #ffffff")
         right.append("sessions", style="dim #a3a3a3")
 
         txt.append_text(right)
         return txt
+

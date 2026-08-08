@@ -26,43 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 def patch_textual_mouse_driver() -> None:
-    """Disable terminal ANSI mouse reporting (modes 1000, 1003, 1006, 1015) in Textual drivers.
-
-    Prevents all raw mouse escape sequence leaks (^[[<0;... / ^[[<35;...) in VS Code / Windows Terminal.
-    """
-    try:
-        from textual.drivers.windows_driver import WindowsDriver
-
-        def _disabled_windows_mouse_support(self: Any) -> None:
-            write = self.write
-            write("\x1b[?1000l")
-            write("\x1b[?1003l")
-            write("\x1b[?1015l")
-            write("\x1b[?1006l")
-            self.flush()
-
-        WindowsDriver._enable_mouse_support = _disabled_windows_mouse_support
-    except Exception as e:
-        logger.debug("Could not patch WindowsDriver: %s", e)
-
-    try:
-        from textual.drivers.linux_driver import LinuxDriver
-
-        def _disabled_linux_mouse_support(self: Any) -> None:
-            write = self.write
-            write("\x1b[?1000l")
-            write("\x1b[?1003l")
-            write("\x1b[?1015l")
-            write("\x1b[?1006l")
-            self.flush()
-
-        LinuxDriver._enable_mouse_support = _disabled_linux_mouse_support
-    except Exception as e:
-        logger.debug("Could not patch LinuxDriver: %s", e)
-
-
-# Apply mouse driver patch on import
-patch_textual_mouse_driver()
+    """Enable standard mouse support in Textual."""
+    pass
 
 
 class JarvisTUIApp(App):

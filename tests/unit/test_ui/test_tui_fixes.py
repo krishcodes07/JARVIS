@@ -370,22 +370,22 @@ async def test_prompt_history_up_down_navigation():
         screen.prompt_box.text = "second prompt"
         await screen.submit_prompt()
 
-        # Press Up arrow key to navigate back in history
-        up_event = MagicMock(spec=Key)
-        up_event.key = "up"
-        screen.on_key(up_event)
+        # Press PageUp to navigate back in history
+        pageup_event = MagicMock(spec=Key)
+        pageup_event.key = "pageup"
+        screen.on_key(pageup_event)
         assert screen.prompt_box.text == "second prompt"
 
-        screen.on_key(up_event)
+        screen.on_key(pageup_event)
         assert screen.prompt_box.text == "first prompt"
 
-        # Press Down arrow key to navigate forward
-        down_event = MagicMock(spec=Key)
-        down_event.key = "down"
-        screen.on_key(down_event)
+        # Press PageDown to navigate forward in history
+        pagedown_event = MagicMock(spec=Key)
+        pagedown_event.key = "pagedown"
+        screen.on_key(pagedown_event)
         assert screen.prompt_box.text == "second prompt"
 
-        screen.on_key(down_event)
+        screen.on_key(pagedown_event)
         assert screen.prompt_box.text == ""
 
 

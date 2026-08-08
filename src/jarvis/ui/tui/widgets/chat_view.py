@@ -9,6 +9,7 @@ import time
 
 from rich.markdown import Markdown
 from rich.text import Text
+from textual import events, on
 from textual.containers import VerticalScroll
 from textual.widgets import Static
 
@@ -117,7 +118,7 @@ class ToolCallWidget(Static):
         t.append(f"↳ {res}", style="italic #737373")
         self.output_widget.update(t)
 
-    def on_click(self) -> None:
+    def on_click(self, event: events.Click) -> None:
         if self.result_text:
             self._expanded = not self._expanded
             if self._expanded:
@@ -157,7 +158,8 @@ class ChatViewWidget(VerticalScroll):
         height: 1fr;
         padding: 1 1 1 1;
         overflow-y: scroll;
-        scrollbar-size-vertical: 0;
+        scrollbar-size-vertical: 1;
+        scrollbar-color: #3b82f6 #1e1e1e;
         scrollbar-size-horizontal: 0;
         border: none;
         background: #000000;

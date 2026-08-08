@@ -18,6 +18,7 @@ from textual.widgets import Button, Input, TextArea
 from textual.worker import get_current_worker
 
 from jarvis.core.config import DATA_DIR
+from jarvis.providers.models_dev import get_model_context_limit
 from jarvis.ui.tui.screens.modals import (
     ApiKeyModal,
     ConfigModal,
@@ -129,6 +130,56 @@ class MainScreen(Screen):
                 provider=c.provider.active,
                 reasoning="high",
             )
+            if self.status_bar.context_tokens is not None:
+                self._update_context_display()
+
+    def _estimate_tokens(self, data: Any) -> int:
+        """Estimate token count for string, message dict, or list of messages/texts."""
+        if not data:
+            return 0
+        if isinstance(data, str):
+            return max(1, int(len(data) / 4))
+        if isinstance(data, dict):
+            content = str(data.get("content", ""))
+            return max(1, int(len(content) / 4))
+        if isinstance(data, (list, tuple)):
+            total_chars = 0
+            for item in data:
+                if isinstance(item, str):
+                    total_chars += len(item)
+                elif isinstance(item, dict):
+                    total_chars += len(str(item.get("content", "")))
+                elif hasattr(item, "content"):
+                    total_chars += len(str(getattr(item, "content")))
+            return max(0, int(total_chars / 4))
+        return 0
+
+    def _update_context_display(self, additional_response_tokens: int = 0) -> None:
+        """Calculate and update context window usage in the status bar footer."""
+        if not self.engine or not self.engine.config:
+            return
+
+        model_name = self.engine.config.provider.model
+        provider_name = self.engine.config.provider.active
+        context_limit = get_model_context_limit(model_name, provider_name)
+
+        # Baseline system prompt + tools estimation (~1500 tokens default system context)
+        baseline_tokens = 1500
+
+        # Conversation history tokens
+        history_tokens = 0
+        if self.engine.memory_manager and self.engine.session:
+            conv = self.engine.memory_manager.conversation
+            if conv and hasattr(conv, "_buffers") and self.engine.session.session_id in conv._buffers:
+                history_tokens = self._estimate_tokens(conv._buffers[self.engine.session.session_id])
+
+        if history_tokens == 0 and hasattr(self.chat_view, "children"):
+            msg_texts = [getattr(m, "raw_content", "") for m in self.chat_view.children if hasattr(m, "raw_content")]
+            history_tokens = self._estimate_tokens(msg_texts)
+
+        total_tokens = baseline_tokens + history_tokens + additional_response_tokens
+        self.status_bar.set_context_usage(total_tokens, context_limit)
+
 
     def on_key(self, event: events.Key) -> None:
         # Handle Alt+V key shortcut to toggle voice mode cleanly without typing 'v'
@@ -183,15 +234,15 @@ class MainScreen(Screen):
 
         if self.prompt_box.input_field.has_focus:
             is_popover_open = self.popover.styles.display == "block"
-            if is_slash and is_popover_open and event.key == "down":
+            if is_slash and is_popover_open and event.key in ("down", "pagedown"):
                 self.popover.highlight_next()
                 event.prevent_default()
                 event.stop()
-            elif is_slash and is_popover_open and event.key == "up":
+            elif is_slash and is_popover_open and event.key in ("up", "pageup"):
                 self.popover.highlight_prev()
                 event.prevent_default()
                 event.stop()
-            elif not is_popover_open and event.key == "up":
+            elif not is_popover_open and event.key in ("up", "pageup"):
                 if self._prompt_history:
                     if self._history_index == -1:
                         self._history_index = len(self._prompt_history) - 1
@@ -200,7 +251,7 @@ class MainScreen(Screen):
                     self.prompt_box.text = self._prompt_history[self._history_index]
                     event.prevent_default()
                     event.stop()
-            elif not is_popover_open and event.key == "down":
+            elif not is_popover_open and event.key in ("down", "pagedown"):
                 if self._history_index != -1:
                     if self._history_index < len(self._prompt_history) - 1:
                         self._history_index += 1
@@ -210,6 +261,14 @@ class MainScreen(Screen):
                         self.prompt_box.text = ""
                     event.prevent_default()
                     event.stop()
+
+    @on(events.MouseScrollUp)
+    def _on_mouse_scroll_up(self, event: events.MouseScrollUp) -> None:
+        self.chat_view.scroll_relative(y=-3, animate=False)
+
+    @on(events.MouseScrollDown)
+    def _on_mouse_scroll_down(self, event: events.MouseScrollDown) -> None:
+        self.chat_view.scroll_relative(y=3, animate=False)
 
     @on(TextArea.Changed, "#prompt-input-field")
     def on_prompt_text_changed(self, event: TextArea.Changed) -> None:
@@ -301,14 +360,17 @@ class MainScreen(Screen):
                 self.chat_view.append_assistant_chunk(chunk)
 
             self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
+            self._update_context_display()
 
         except asyncio.CancelledError:
             logger.info("Chat stream cancelled by user.")
             self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
+            self._update_context_display()
         except Exception as e:
             logger.exception("Error during chat processing")
             self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
             self.chat_view.add_error_message(f"Error: {e}")
+            self._update_context_display()
         finally:
             self._is_generating = False
             self.status_bar.set_generating(False)
@@ -394,6 +456,7 @@ class MainScreen(Screen):
                     accumulated_response.append(chunk)
 
                 self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
+                self._update_context_display()
 
                 # 4. Synthesize and play response via TTS
                 full_text = "".join(accumulated_response).strip()
@@ -464,6 +527,7 @@ class MainScreen(Screen):
             self.chat_view.clear_messages()
             self.header.show_header()
             self.prompt_box.show_hints()
+            self.status_bar.clear_context_usage()
             self.show_toast(
                 f"New conversation session created (ID: {new_session_id})",
                 title="New Session",
@@ -484,6 +548,7 @@ class MainScreen(Screen):
             self.chat_view.clear_messages()
             self.header.show_header()
             self.prompt_box.show_hints()
+            self.status_bar.clear_context_usage()
             self.show_toast(
                 f"Session deleted of ID {old_session_id}",
                 title="Session Reset",
@@ -557,19 +622,23 @@ class MainScreen(Screen):
                     if self.chat_view.has_messages:
                         self.header.hide_header()
                         self.prompt_box.hide_hints()
+                        self._update_context_display()
                     else:
                         self.header.show_header()
                         self.chat_view.clear_messages()
                         self.prompt_box.show_hints()
+                        self.status_bar.clear_context_usage()
                 else:
                     self.header.show_header()
                     self.chat_view.clear_messages()
                     self.prompt_box.show_hints()
+                    self.status_bar.clear_context_usage()
         except Exception as e:
             logger.warning(f"Could not load session history: {e}")
             self.header.show_header()
             self.chat_view.clear_messages()
             self.prompt_box.show_hints()
+            self.status_bar.clear_context_usage()
 
     # ─── Modal Actions ───
 
@@ -658,6 +727,7 @@ class MainScreen(Screen):
                     self.chat_view.clear_messages()
                     self.header.show_header()
                     self.prompt_box.show_hints()
+                    self.status_bar.clear_context_usage()
                 else:
                     if self.engine:
                         from jarvis.core.session import Session

@@ -4,8 +4,8 @@ jarvis:
   persona: professional_assistant
   log_level: INFO
 provider:
-  active: opencode
-  model: glm-5-free
+  active: kilo
+  model: tencent/hy3:free
   temperature: 0.7
   max_tokens: 16000
   top_p: 1.0
@@ -100,7 +100,7 @@ voice:
 ui:
   default: tui
   tui:
-    theme: jarvis
+    theme: pink-city
     show_tool_output: true
     show_thinking: false
   web:
