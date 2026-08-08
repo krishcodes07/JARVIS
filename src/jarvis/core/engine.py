@@ -30,7 +30,6 @@ if TYPE_CHECKING:
     from jarvis.memory.manager import MemoryManager
     from jarvis.providers.manager import ProviderManager
     from jarvis.tools.executor import ToolExecutor
-    from jarvis.tools.rag import ToolRetriever
     from jarvis.tools.registry import ToolRegistry
     from jarvis.voice.manager import VoiceManager
 
@@ -64,7 +63,6 @@ class JarvisEngine:
         self.tool_executor: ToolExecutor | None = None
         self.mcp_manager: MCPManager | None = None
         self.voice_manager: VoiceManager | None = None
-        self.tool_retriever: ToolRetriever | None = None
         self.prompt_builder: SystemPromptBuilder = SystemPromptBuilder()
         self.session: Session | None = None
         self._initialized: bool = False
@@ -94,7 +92,6 @@ class JarvisEngine:
         await self._init_tools(config)
         await self._init_mcp(config)
         await self._init_voice(config)
-        await self._init_tool_rag(config)
 
         # 3. Create session
         from jarvis.core.session import Session
@@ -124,6 +121,7 @@ class JarvisEngine:
 
         # 2. Gather tool definitions & capability summary
         tool_defs, capability_summary = await self._get_tool_definitions(query=message)
+        all_raw_defs = await self._get_all_raw_tool_definitions()
 
         # 3. Build system prompt & context
         persona = get_persona(self.config.jarvis.persona)
@@ -208,6 +206,7 @@ class JarvisEngine:
                     tool_args,
                     approval_callback=approval_callback,
                 )
+                self._update_tool_defs_from_schema_call(tool_defs, tool_name, tool_args, all_raw_defs)
 
                 # Record tool call and result in conversation memory
                 args_str = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
@@ -255,6 +254,7 @@ class JarvisEngine:
         session_id = self.session.session_id
 
         tool_defs, capability_summary = await self._get_tool_definitions(query=message)
+        all_raw_defs = await self._get_all_raw_tool_definitions()
 
         persona = get_persona(self.config.jarvis.persona)
 
@@ -347,6 +347,7 @@ class JarvisEngine:
                         tool_args,
                         approval_callback=approval_callback,
                     )
+                    self._update_tool_defs_from_schema_call(tool_defs, tool_name, tool_args, all_raw_defs)
 
                     if callable(on_tool_result):
                         with contextlib.suppress(Exception):
@@ -454,52 +455,37 @@ class JarvisEngine:
             self.voice_manager = None
             logger.warning(f"Voice manager failed to initialize ({e}); using text mode.")
 
-    async def _init_tool_rag(self, config: JarvisConfig) -> None:
-        """Initialize and index Tool RAG if enabled."""
-        if not config.tools.enabled or not config.tools.rag.enabled:
+    def _update_tool_defs_from_schema_call(
+        self,
+        tool_defs: list[ToolDefinition],
+        tool_name: str,
+        tool_args: dict[str, Any],
+        all_raw_defs: list[ToolDefinition],
+    ) -> None:
+        """If get_schema was invoked, add requested tool schemas to tool_defs for subsequent turns."""
+        if tool_name != "get_schema":
             return
-        try:
-            from jarvis.tools.rag import ToolRetriever
-            embedder = self.memory_manager.embedder if (self.memory_manager and self.memory_manager.vector) else None
-            if embedder is None:
-                from jarvis.memory.vector.embedder import Embedder
-                embedder = Embedder(
-                    model=config.memory.vector.embedding_model,
-                    preferred_provider=config.memory.vector.embedding_provider,
-                    provider_manager=self.provider_manager,
-                )
-            self.tool_retriever = ToolRetriever(embedder=embedder)
-            await self.tool_retriever.initialize()
+        raw_names = tool_args.get("tool_names") or tool_args.get("names") or []
+        if isinstance(raw_names, str):
+            names = [n.strip() for n in raw_names.split(",") if n.strip()]
+        elif isinstance(raw_names, list):
+            names = [str(n).strip() for n in raw_names if str(n).strip()]
+        else:
+            names = []
 
-            all_tools = await self._get_all_raw_tool_definitions()
-            if all_tools:
-                await self.tool_retriever.index_tools(all_tools)
-        except Exception as e:
-            logger.warning(f"Failed to initialize Tool RAG: {e}")
+        existing = {t.name for t in tool_defs}
+        for raw in all_raw_defs:
+            if raw.name in names and raw.name not in existing:
+                tool_defs.append(raw)
+                existing.add(raw.name)
 
     def _get_capability_summary(self, all_tools: list[ToolDefinition]) -> str:
-        """Generate a concise capability summary of all available tools grouped by category."""
-        if not all_tools:
-            return ""
-
-        categories: dict[str, list[str]] = {}
-        for tool in all_tools:
-            cat = (tool.category or "basic").title()
-            name_display = tool.name
-            if tool.aliases:
-                name_display += f" (aliases: {', '.join(tool.aliases[:3])})"
-            categories.setdefault(cat, []).append(name_display)
-
-        lines = [
-            "JARVIS has access to the following full tool categories & capabilities:",
-            "Use the `search_tools(query)` meta-tool to dynamically discover & load any specific tool schemas you need.\n"
-        ]
-        for cat, items in sorted(categories.items()):
-            sample = ", ".join(items[:6])
-            more = f" ... (+{len(items)-6} more)" if len(items) > 6 else ""
-            lines.append(f"- **{cat}**: {sample}{more}")
-
-        return "\n".join(lines)
+        """Generate a concise capability summary informing the model of discovery tools."""
+        return (
+            "JARVIS has access to external tools and MCP capabilities.\n"
+            "Use the `list_tools()` tool to discover all available tool names (built-in and MCP tools),\n"
+            "and use `get_schema(tool_names=[...])` to retrieve the JSON parameters schema for any tool you wish to invoke."
+        )
 
     async def _get_all_raw_tool_definitions(self) -> list[ToolDefinition]:
         """Gather complete list of all registered built-in and MCP tool definitions."""
@@ -526,33 +512,20 @@ class JarvisEngine:
     async def _get_tool_definitions(self, query: str | None = None) -> tuple[list[ToolDefinition], str]:
         """Convert registered tools into provider ToolDefinition list & capability summary.
 
-        Combines built-in tools from the tool registry with MCP tools.
-        If a query is provided and Tool RAG is enabled, dynamically selects
-        the top relevant tools while generating a high-level capability summary.
+        Filters total tools down to always_include tools (including list_tools and get_schema).
         """
         all_defs = await self._get_all_raw_tool_definitions()
         capability_summary = self._get_capability_summary(all_defs)
 
-        if (
-            query
-            and self.config
-            and self.config.tools.rag.enabled
-            and self.tool_retriever
-        ):
-            rag_cfg = self.config.tools.rag
-            always_inc = list(rag_cfg.always_include or [])
-            if "search_tools" not in always_inc:
-                always_inc.append("search_tools")
+        always_inc_names = set()
+        if self.config and self.config.tools and self.config.tools.always_include:
+            always_inc_names.update(self.config.tools.always_include)
 
-            selected_tools = await self.tool_retriever.retrieve(
-                query=query,
-                all_tools=all_defs,
-                top_k=rag_cfg.top_k,
-                always_include=always_inc,
-            )
-            return selected_tools, capability_summary
+        always_inc_names.add("list_tools")
+        always_inc_names.add("get_schema")
 
-        return all_defs, capability_summary
+        selected_tools = [t for t in all_defs if t.name in always_inc_names]
+        return selected_tools, capability_summary
 
     async def _execute_tool(
         self,

@@ -99,6 +99,11 @@ class MainScreen(Screen):
         self.toast.show_toast(message, title=title, style=style, duration=duration)
 
     def on_mount(self) -> None:
+        import sys
+        with contextlib.suppress(Exception):
+            sys.stdout.write("\x1b[?1003l")
+            sys.stdout.flush()
+
         self.prompt_box.input_field.focus()
         self.update_engine_status()
         # Load current session history

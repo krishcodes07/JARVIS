@@ -15,6 +15,15 @@ from textual.widget import Widget
 from textual.widgets import Static, TextArea
 
 
+import re
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from textual.widgets.text_area import EditResult
+
+MOUSE_ESCAPE_PATTERN = re.compile(r"(?:\x1b|\^\[)?\[<\d+;\d+;\d+[mM]")
+
+
 class PromptInputTextArea(TextArea):
     """Custom TextArea for PromptBoxWidget supporting Enter=Submit and Shift+Enter=Newline."""
 
@@ -26,7 +35,40 @@ class PromptInputTextArea(TextArea):
             self.input = input_control
             self.value = value
 
+    @on(TextArea.Changed)
+    def _on_text_changed(self) -> None:
+        """Sanitize self.text live whenever text changes to eliminate mouse escape sequences."""
+        if MOUSE_ESCAPE_PATTERN.search(self.text):
+            cleaned = MOUSE_ESCAPE_PATTERN.sub("", self.text)
+            if cleaned != self.text:
+                self.load_text(cleaned)
+
+    def insert(
+        self,
+        text: str,
+        location: tuple[int, int] | None = None,
+        *,
+        maintain_selection_offset: bool = True,
+    ) -> EditResult:
+        """Filter out raw ANSI SGR mouse tracking escape codes before insertion."""
+        cleaned = MOUSE_ESCAPE_PATTERN.sub("", text)
+        return super().insert(
+            cleaned,
+            location=location,
+            maintain_selection_offset=maintain_selection_offset,
+        )
+
     async def _on_key(self, event: events.Key) -> None:
+        # Ignore raw SGR mouse escape sequences delivered as key events
+        char = getattr(event, "character", None)
+        key = getattr(event, "key", None)
+        if (isinstance(char, str) and MOUSE_ESCAPE_PATTERN.search(char)) or (
+            isinstance(key, str) and MOUSE_ESCAPE_PATTERN.search(key)
+        ):
+            event.prevent_default()
+            event.stop()
+            return
+
         is_newline_key = (
             event.key in ("shift+enter", "alt+enter", "ctrl+enter")
             or (event.key == "enter" and (getattr(event, "shift", False) or getattr(event, "alt", False) or getattr(event, "ctrl", False)))
