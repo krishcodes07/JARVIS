@@ -63,8 +63,8 @@ class AppendFileTool(BaseTool):
             return "Error: File path is required."
 
         try:
-            filepath = safe_path(path)
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            filepath = self.resolve_path(path)
+            filepath.parent.mkdir(parents=True, exist_ok=True)
 
             with open(filepath, "a", encoding=encoding) as f:
                 f.write(content)

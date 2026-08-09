@@ -42,7 +42,7 @@ def test_app_import():
 
 
 def test_slash_command_new_registration():
-    from jarvis.ui.tui.commands import COMMAND_REGISTRY, filter_commands, get_command
+    from jarvis.ui.tui.commands import filter_commands, get_command
     cmd = get_command("/new")
     assert cmd is not None
     assert cmd.name == "/new"

@@ -56,14 +56,14 @@ class MoveFileTool(BaseTool):
             return "Error: Both 'source' and 'destination' paths are required."
 
         try:
-            src_path = safe_path(src)
-            dst_path = safe_path(dst)
+            src_path = self.resolve_path(src)
+            dst_path = self.resolve_path(dst)
 
-            if not os.path.exists(src_path):
+            if not src_path.exists():
                 return f"Error: Source path not found: {src}"
 
-            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-            shutil.move(src_path, dst_path)
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src_path), str(dst_path))
             return f"Successfully moved/renamed '{src}' to '{dst}'."
 
         except Exception as e:

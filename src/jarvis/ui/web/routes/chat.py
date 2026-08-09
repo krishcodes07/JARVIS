@@ -55,8 +55,8 @@ async def chat_endpoint(request: ChatRequest) -> ChatResponse:
     if not engine or not engine._initialized:
         raise RuntimeError("JARVIS Engine is not initialized.")
 
-    response_text = await engine.chat(request.message)
-    session_id = engine.session.session_id if engine.session else "default"
+    session_id = request.session_id or (engine.session.session_id if engine.session else "default")
+    response_text = await engine.chat(request.message, session_id=session_id)
 
     return ChatResponse(response=response_text, session_id=session_id)
 
@@ -77,6 +77,7 @@ async def websocket_chat_endpoint(websocket: WebSocket) -> None:
             raw_data = await websocket.receive_text()
             data = json.loads(raw_data)
             user_msg = data.get("message", "").strip()
+            session_id = data.get("session_id") or (engine.session.session_id if engine.session else "default")
 
             if not user_msg:
                 continue
@@ -107,6 +108,7 @@ async def websocket_chat_endpoint(websocket: WebSocket) -> None:
             try:
                 async for chunk in engine.stream_chat(
                     user_msg,
+                    session_id=session_id,
                     on_tool_call=on_tool_call,
                     approval_callback=approval_callback,
                 ):

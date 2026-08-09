@@ -117,7 +117,7 @@ class JarvisEngine:
         if not self._initialized or not self.config or not self.session:
             raise RuntimeError("Engine not initialized. Call initialize() first.")
 
-        session_id = self.session.session_id
+        session_id = kwargs.get("session_id") or self.session.session_id
 
         # 2. Gather tool definitions & capability summary
         tool_defs, capability_summary = await self._get_tool_definitions(query=message)
@@ -251,7 +251,7 @@ class JarvisEngine:
         if not self._initialized or not self.config or not self.session:
             raise RuntimeError("Engine not initialized. Call initialize() first.")
 
-        session_id = self.session.session_id
+        session_id = kwargs.get("session_id") or self.session.session_id
 
         tool_defs, capability_summary = await self._get_tool_definitions(query=message)
         all_raw_defs = await self._get_all_raw_tool_definitions()
@@ -480,11 +480,18 @@ class JarvisEngine:
                 existing.add(raw.name)
 
     def _get_capability_summary(self, all_tools: list[ToolDefinition]) -> str:
-        """Generate a concise capability summary informing the model of discovery tools."""
+        """Generate a concise capability summary informing the model of discovery tools and skills."""
+        skills_enabled = self.config.skills.enabled if (self.config and hasattr(self.config, "skills")) else True
+        skills_info = (
+            "\n- Use `list_skills()` to discover specialized procedural workflows/skills (e.g. deep-research, code-review)."
+            "\n- Use `get_skill(skill_name=...)` to retrieve full instructions and step-by-step guidance for a specific skill."
+            if skills_enabled else ""
+        )
         return (
             "JARVIS has access to external tools and MCP capabilities.\n"
-            "Use the `list_tools()` tool to discover all available tool names (built-in and MCP tools),\n"
-            "and use `get_schema(tool_names=[...])` to retrieve the JSON parameters schema for any tool you wish to invoke."
+            "- Use `list_tools()` to discover all available tool names (built-in and MCP tools).\n"
+            "- Use `get_schema(tool_names=[...])` to retrieve the JSON parameters schema for any tool you wish to invoke."
+            f"{skills_info}"
         )
 
     async def _get_all_raw_tool_definitions(self) -> list[ToolDefinition]:
@@ -512,7 +519,7 @@ class JarvisEngine:
     async def _get_tool_definitions(self, query: str | None = None) -> tuple[list[ToolDefinition], str]:
         """Convert registered tools into provider ToolDefinition list & capability summary.
 
-        Filters total tools down to always_include tools (including list_tools and get_schema).
+        Filters total tools down to always_include tools (including list_tools, get_schema, list_skills, get_skill).
         """
         all_defs = await self._get_all_raw_tool_definitions()
         capability_summary = self._get_capability_summary(all_defs)
@@ -523,6 +530,8 @@ class JarvisEngine:
 
         always_inc_names.add("list_tools")
         always_inc_names.add("get_schema")
+        always_inc_names.add("list_skills")
+        always_inc_names.add("get_skill")
 
         selected_tools = [t for t in all_defs if t.name in always_inc_names]
         return selected_tools, capability_summary

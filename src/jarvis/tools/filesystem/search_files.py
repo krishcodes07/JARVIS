@@ -64,8 +64,8 @@ class SearchFilesTool(BaseTool):
             return "Error: Pattern parameter is required."
 
         try:
-            base_dir = safe_path(root_path)
-            if not os.path.exists(base_dir):
+            base_dir = self.resolve_path(root_path)
+            if not base_dir.exists():
                 return f"Error: Root directory not found: {root_path}"
 
             search_glob = os.path.join(base_dir, pattern)

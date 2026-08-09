@@ -145,7 +145,7 @@ class AudioPlayer:
         self._pa_stream = stream
 
         mp3_buffer = bytearray()
-        target_buffer_size = 12288  # ~12KB buffer (~1 sec audio) for smooth streaming
+        target_buffer_size = 2048  # Initial 2KB buffer (~100ms) for ultra-fast startup
 
         try:
             async for chunk in chunks:
@@ -159,6 +159,7 @@ class AudioPlayer:
                 if len(mp3_buffer) >= target_buffer_size:
                     data = bytes(mp3_buffer)
                     mp3_buffer.clear()
+                    target_buffer_size = 8192  # Ramp to 8KB for smooth continuous playback
 
                     samples = await asyncio.to_thread(self.decode, data)
                     if samples is None or len(samples) == 0:

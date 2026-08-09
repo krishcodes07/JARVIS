@@ -38,7 +38,14 @@ async def _download_user_media(
             await client.disconnect()
             return f"Error: Message ID {msg_id} in '{chat_id}' does not contain downloadable media."
 
-        out_path = Path(output_dir or "downloads/telegram").resolve()
+        if output_dir:
+            out_path = Path(output_dir).expanduser().resolve()
+        else:
+            try:
+                from jarvis.core.paths import get_jarvis_home
+                out_path = get_jarvis_home() / "workspace" / "downloads" / "telegram"
+            except Exception:
+                out_path = (Path.home() / ".jarvis" / "workspace" / "downloads" / "telegram").resolve()
         out_path.mkdir(parents=True, exist_ok=True)
 
         downloaded_file = await client.download_media(target_msg, file=str(out_path))

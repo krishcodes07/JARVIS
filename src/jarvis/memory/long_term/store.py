@@ -12,7 +12,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from jarvis.core.config import PROJECT_ROOT
+from jarvis.core.config import resolve_data_path
 from jarvis.memory.base import BaseMemory
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ class LongTermStore(BaseMemory):
 
     def __init__(self, config: LongTermMemoryConfig) -> None:
         self.config = config
-        self._storage_path = PROJECT_ROOT / config.storage_path / "memories.json"
+        self._storage_path = resolve_data_path(config.storage_path) / "memories.json"
         self._memories: dict[str, dict[str, Any]] = {}
 
     async def initialize(self) -> None:

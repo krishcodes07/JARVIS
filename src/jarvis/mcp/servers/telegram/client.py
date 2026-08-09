@@ -41,14 +41,19 @@ def get_telegram_client() -> TelegramClient:
 def run_async(coro_fn: Callable[..., Coroutine[Any, Any, T]], *args: Any, **kwargs: Any) -> T:
     """Execute an async Telethon function in a fresh or existing event loop."""
     try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        import nest_asyncio
+        nest_asyncio.apply()
+        return loop.run_until_complete(coro_fn(*args, **kwargs))
+
+    try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-
-    if loop.is_running():
-        # Handle case where loop is already running in current thread
-        import nest_asyncio
-        nest_asyncio.apply()
 
     return loop.run_until_complete(coro_fn(*args, **kwargs))

@@ -57,17 +57,17 @@ class DeleteFileTool(BaseTool):
             return "Error: Path is required."
 
         try:
-            target = safe_path(path)
-            if not os.path.exists(target):
+            target = self.resolve_path(path)
+            if not target.exists():
                 return f"Error: Path not found: {path}"
 
-            if os.path.isdir(target):
+            if target.is_dir():
                 if not recursive:
                     return f"Error: '{path}' is a directory. Set recursive=True to delete directory."
                 shutil.rmtree(target)
                 return f"Successfully deleted directory '{path}'."
             else:
-                os.remove(target)
+                target.unlink()
                 return f"Successfully deleted file '{path}'."
 
         except Exception as e:

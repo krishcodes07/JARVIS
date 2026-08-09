@@ -39,12 +39,8 @@ class ConversationStore:
 
     @classmethod
     def default(cls) -> "ConversationStore":
-        data_root = QStandardPaths.writableLocation(
-            QStandardPaths.StandardLocation.AppDataLocation
-        )
-        if not data_root:
-            data_root = str(Path.home() / ".jarvis_gui")
-        return cls(Path(data_root) / "conversations.db")
+        from jarvis.core.paths import get_gui_dir
+        return cls(get_gui_dir() / "conversations.db")
 
     @staticmethod
     def _now() -> str:
@@ -117,7 +113,9 @@ class ConversationStore:
                 "UPDATE conversations SET updated_at = ? WHERE id = ?",
                 (timestamp, conversation_id),
             )
-        return int(cursor.lastrowid)
+        if cursor.lastrowid is None:
+            raise RuntimeError("Failed to retrieve row ID for inserted message")
+        return cursor.lastrowid
 
     def list_conversations(self, limit: int = 100) -> list[ConversationSummary]:
         with self._connect() as connection:

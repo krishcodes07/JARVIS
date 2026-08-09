@@ -45,10 +45,10 @@ class ListDirectoryTool(BaseTool):
         path = kwargs.get("path") or "."
 
         try:
-            dirpath = safe_path(path)
-            if not os.path.exists(dirpath):
+            dirpath = self.resolve_path(path)
+            if not dirpath.exists():
                 return f"Error: Directory not found: {path}"
-            if not os.path.isdir(dirpath):
+            if not dirpath.is_dir():
                 return f"Error: Path is a file, not a directory: {path}"
 
             entries = sorted(os.listdir(dirpath))
@@ -57,11 +57,11 @@ class ListDirectoryTool(BaseTool):
 
             lines = [f"Directory contents of '{path}' ({len(entries)} items):\n"]
             for entry in entries:
-                full = os.path.join(dirpath, entry)
-                if os.path.isdir(full):
+                full = dirpath / entry
+                if full.is_dir():
                     lines.append(f"  [DIR]  {entry}/")
                 else:
-                    size = os.path.getsize(full)
+                    size = full.stat().st_size
                     lines.append(f"  [FILE] {entry} ({size:,} bytes)")
 
             return "\n".join(lines)

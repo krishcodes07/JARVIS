@@ -67,3 +67,24 @@ async def test_filesystem_tools_execution(tmp_path):
     del_res = await deleter.execute(path=test_path)
     assert "Successfully deleted file" in del_res
     assert not test_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_filesystem_tools_sandbox_enforcement(tmp_path):
+    config = JarvisConfig.load()
+    config.tools.sandbox.enabled = True
+    config.tools.sandbox.workspace = str(tmp_path)
+    config.tools.sandbox.extra_paths = []
+
+    reader = ReadFileTool()
+    reader.configure(config)
+
+    # Path inside sandbox
+    inside_file = tmp_path / "inside.txt"
+    inside_file.write_text("allowed content", encoding="utf-8")
+    res_inside = await reader.execute(path=str(inside_file))
+    assert "allowed content" in res_inside
+
+    # Path outside sandbox
+    with pytest.raises(PermissionError):
+        reader.resolve_path("/etc/passwd" if "/" in str(tmp_path) else "C:\\Windows\\System32\\drivers\\etc\\hosts")

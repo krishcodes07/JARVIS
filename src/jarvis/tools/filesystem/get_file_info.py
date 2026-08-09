@@ -47,8 +47,8 @@ class GetFileInfoTool(BaseTool):
             return "Error: Path is required."
 
         try:
-            filepath = safe_path(path)
-            if not os.path.exists(filepath):
+            filepath = self.resolve_path(path)
+            if not filepath.exists():
                 return f"Error: Path not found: {path}"
 
             st = os.stat(filepath)

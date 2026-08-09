@@ -1,6 +1,6 @@
 """
 Sessions Modal Screen — Floating dialog for managing and switching sessions (/sessions).
-Reads real session JSON files from data/conversations/ and matches Image 2 design.
+Reads real session JSON files from get_sessions_dir() (~/.jarvis/workspace/sessions) and matches Image 2 design.
 
 Supports:
 - Keyboard navigation (up/down from search)
@@ -23,7 +23,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
-from jarvis.core.config import DATA_DIR
+from jarvis.core.paths import get_sessions_dir
 from jarvis.ui.tui.utils import (
     format_date_group,
     handle_search_key_navigation,
@@ -139,7 +139,7 @@ class SessionModal(ModalScreen[str | None]):
             if not confirmed:
                 return
 
-            conv_path = DATA_DIR / "conversations" / f"{sid}.json"
+            conv_path = get_sessions_dir() / f"{sid}.json"
             if conv_path.exists():
                 try:
                     os.remove(conv_path)
@@ -204,7 +204,7 @@ class SessionModal(ModalScreen[str | None]):
             self.search_input.placeholder = "Type new name, then press Ctrl+R"
             return
 
-        conv_path = DATA_DIR / "conversations" / f"{sid}.json"
+        conv_path = get_sessions_dir() / f"{sid}.json"
         if not conv_path.exists():
             return
 
@@ -259,13 +259,13 @@ class SessionModal(ModalScreen[str | None]):
         self.populate_list(self.search_input.value if self.search_input else "")
 
     def load_real_sessions(self) -> list[dict]:
-        """Scan data/conversations/ for real JSON session files."""
+        """Scan get_sessions_dir() for real JSON session files."""
         sessions: list[dict] = []
         sessions.append(
             {"id": "new", "title": "+ Create New Session", "date_group": "Actions", "active": False}
         )
 
-        conv_dir = DATA_DIR / "conversations"
+        conv_dir = get_sessions_dir()
         if not conv_dir.exists():
             return sessions
 

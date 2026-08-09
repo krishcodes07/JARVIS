@@ -8,11 +8,11 @@ from __future__ import annotations
 import json
 import logging
 
-from jarvis.core.config import DATA_DIR
+from jarvis.core.paths import get_cache_dir
 
 logger = logging.getLogger(__name__)
 
-CACHE_DIR = DATA_DIR / "cache"
+CACHE_DIR = get_cache_dir()
 RECENT_MODELS_PATH = CACHE_DIR / "recent_models.json"
 MODELS_CACHE_PATH = CACHE_DIR / "models_cache.json"
 PINNED_SESSIONS_PATH = CACHE_DIR / "pinned_sessions.json"

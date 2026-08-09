@@ -43,6 +43,8 @@ STANDARD_BASE_URLS: dict[str, str] = {
 
 def load_models_dev_cache() -> dict[str, Any]:
     """Load models.dev catalog from local cache file if available."""
+    from jarvis.core.config import PROJECT_ROOT
+
     if MODELS_DEV_CACHE_FILE.exists():
         try:
             with open(MODELS_DEV_CACHE_FILE, encoding="utf-8") as f:
@@ -51,6 +53,19 @@ def load_models_dev_cache() -> dict[str, Any]:
                     return data
         except Exception as e:
             logger.warning(f"Failed loading models.dev cache: {e}")
+
+    # Fallback to repo data catalog file
+    repo_cache = PROJECT_ROOT / "data" / "models_dev_cache.json"
+    if repo_cache.exists():
+        try:
+            with open(repo_cache, encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data:
+                    save_models_dev_cache(data)
+                    return data
+        except Exception as e:
+            logger.warning(f"Failed loading fallback models.dev cache: {e}")
+
     return {}
 
 
@@ -98,11 +113,15 @@ def get_provider_env_var(provider_id: str, provider_data: dict[str, Any]) -> str
 def is_provider_connected(provider_id: str, provider_data: dict[str, Any] | None = None) -> bool:
     """Check whether an API key for the provider is set and non-empty in os.environ or .env."""
     from dotenv import load_dotenv
-    from jarvis.core.config import PROJECT_ROOT
+    from jarvis.core.config import PROJECT_ROOT, get_jarvis_home
 
-    env_path = PROJECT_ROOT / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
+    repo_env = PROJECT_ROOT / ".env"
+    home_env = get_jarvis_home() / ".env"
+
+    if repo_env.exists():
+        load_dotenv(repo_env)
+    if home_env.exists():
+        load_dotenv(home_env, override=True)
 
     if provider_data is None:
         cache = load_models_dev_cache()

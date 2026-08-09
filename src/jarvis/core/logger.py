@@ -30,10 +30,10 @@ def setup_logging(
         log_dir: Directory for log files. Defaults to data/logs/.
         log_file: Name of the log file.
     """
-    from jarvis.core.config import DATA_DIR
+    from jarvis.core.paths import get_logs_dir
 
     if log_dir is None:
-        log_dir = DATA_DIR / "logs"
+        log_dir = get_logs_dir()
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Root logger

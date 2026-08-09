@@ -47,8 +47,8 @@ class MakeDirectoryTool(BaseTool):
             return "Error: Directory path is required."
 
         try:
-            dirpath = safe_path(path)
-            os.makedirs(dirpath, exist_ok=True)
+            dirpath = self.resolve_path(path)
+            dirpath.mkdir(parents=True, exist_ok=True)
             return f"Successfully created directory '{path}'."
         except Exception as e:
             return f"Error creating directory '{path}': {e}"

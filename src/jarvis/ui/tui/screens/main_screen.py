@@ -17,7 +17,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Input, TextArea
 from textual.worker import get_current_worker
 
-from jarvis.core.config import DATA_DIR
+from jarvis.core.paths import get_sessions_dir
 from jarvis.providers.models_dev import get_model_context_limit
 from jarvis.ui.tui.screens.modals import (
     ApiKeyModal,
@@ -607,7 +607,7 @@ class MainScreen(Screen):
             self.chat_view.add_error_message(f"Unknown command '{cmd}'. Type /help for available commands.")
 
     def load_session_history(self, session_id: str) -> None:
-        filepath = DATA_DIR / "conversations" / f"{session_id}.json"
+        filepath = get_sessions_dir() / f"{session_id}.json"
         if not filepath.exists():
             self.header.show_header()
             self.chat_view.clear_messages()

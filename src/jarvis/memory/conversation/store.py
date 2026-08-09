@@ -10,9 +10,9 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from jarvis.core.config import DATA_DIR
+from jarvis.core.paths import get_sessions_dir
 from jarvis.memory.base import BaseMemory
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ class ConversationStore(BaseMemory):
     """JSON-backed conversation memory.
 
     Each session's conversation is stored as a separate JSON file
-    in data/conversations/{session_id}.json.
+    in ~/.jarvis/workspace/sessions/{session_id}.json.
 
     Features:
     - Sliding window buffer (keeps last N messages)
@@ -35,7 +35,7 @@ class ConversationStore(BaseMemory):
 
     def __init__(self, config: ConversationMemoryConfig) -> None:
         self.config = config
-        self._storage_dir = DATA_DIR / "conversations"
+        self._storage_dir = get_sessions_dir()
         self._buffers: dict[str, list[dict[str, Any]]] = {}
 
     async def initialize(self) -> None:
@@ -106,7 +106,7 @@ class ConversationStore(BaseMemory):
         filepath = self._storage_dir / f"{session_id}.json"
         if filepath.exists():
             with open(filepath, encoding="utf-8") as f:
-                return json.load(f)
+                return cast(list[dict[str, Any]], json.load(f))
         return []
 
     async def _save_session(self, session_id: str) -> None:

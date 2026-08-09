@@ -5,7 +5,7 @@ jarvis:
   log_level: INFO
 provider:
   active: opencode
-  model: minimax-m3-free
+  model: mimo-v2.5-free
   temperature: 0.7
   max_tokens: 16000
   top_p: 1.0
@@ -57,11 +57,17 @@ tools:
   - run_command
   - make_directory
   - delete_file
+  - list_skills
+  - get_skill
   categories:
     basic: true
     filesystem: true
     system: true
     code: true
+skills:
+  enabled: true
+  skills_dir: src/jarvis/skills
+  disabled_skills: []
 mcp:
   enabled: true
   auto_start: []
@@ -102,7 +108,7 @@ ui:
   tui:
     theme: mercury
     show_tool_output: true
-    show_thinking: false
+    show_thinking: true
   web:
     host: 0.0.0.0
     port: 8000

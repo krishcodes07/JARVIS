@@ -56,15 +56,15 @@ class CopyFileTool(BaseTool):
             return "Error: Both 'source' and 'destination' paths are required."
 
         try:
-            src_path = safe_path(src)
-            dst_path = safe_path(dst)
+            src_path = self.resolve_path(src)
+            dst_path = self.resolve_path(dst)
 
-            if not os.path.exists(src_path):
+            if not src_path.exists():
                 return f"Error: Source path not found: {src}"
 
-            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
 
-            if os.path.isdir(src_path):
+            if src_path.is_dir():
                 shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
                 return f"Successfully copied directory '{src}' to '{dst}'."
             else:

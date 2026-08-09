@@ -13,7 +13,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from jarvis.core.config import PROJECT_ROOT
+from jarvis.core.config import resolve_data_path
 from jarvis.memory.base import BaseMemory
 from jarvis.memory.vector.embedder import Embedder
 
@@ -37,7 +37,7 @@ class VectorStore(BaseMemory):
     def __init__(self, config: VectorMemoryConfig, embedder: Embedder) -> None:
         self.config = config
         self._embedder = embedder
-        self._storage_path = PROJECT_ROOT / config.storage_path
+        self._storage_path = resolve_data_path(config.storage_path)
         self._collection = None
         self._client = None
 

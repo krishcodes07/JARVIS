@@ -2,9 +2,9 @@
 JARVIS Configuration — Loads and manages all configuration.
 
 Configuration sources (in priority order):
-1. Environment variables (.env)
-2. YAML config file (config/jarvis.yaml)
-3. JSON config files (config/providers.json, config/models.json)
+1. Environment variables (~/.jarvis/.env and system env)
+2. YAML config file (~/.jarvis/config/jarvis.yaml or config/jarvis.yaml)
+3. JSON config files (providers.json, models.json)
 4. Default values
 """
 
@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -22,10 +23,96 @@ from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
-# ─── Project root detection ──────────────────────────────────
+# ─── Project Root & User Home Detection ──────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parents[3]  # src/jarvis/core -> project root
-CONFIG_DIR = PROJECT_ROOT / "config"
-DATA_DIR = PROJECT_ROOT / "data"
+
+
+def get_jarvis_home() -> Path:
+    """Get the JARVIS user home directory path (~/.jarvis)."""
+    env_home = os.getenv("JARVIS_HOME")
+    if env_home:
+        return Path(env_home).resolve()
+    return (Path.home() / ".jarvis").resolve()
+
+
+JARVIS_HOME = get_jarvis_home()
+JARVIS_CONFIG_DIR = JARVIS_HOME / "config"
+JARVIS_WORKSPACE_DIR = JARVIS_HOME / "workspace"
+
+# Backward compatibility aliases
+CONFIG_DIR = JARVIS_CONFIG_DIR
+DATA_DIR = JARVIS_WORKSPACE_DIR
+
+
+def ensure_jarvis_home() -> Path:
+    """Ensure ~/.jarvis home directory structure exists and copy template configs/.env if missing."""
+    home_dir = get_jarvis_home()
+    config_dir = home_dir / "config"
+    workspace_dir = home_dir / "workspace"
+
+    # Create workspace subdirectories
+    subdirs = [
+        config_dir,
+        workspace_dir,
+        workspace_dir / "sessions",
+        workspace_dir / "long_term_memory",
+        workspace_dir / "vector_store",
+        workspace_dir / "knowledge_base",
+        workspace_dir / "logs",
+        workspace_dir / "cache",
+        workspace_dir / "gui",
+        workspace_dir / "skills",
+    ]
+    for d in subdirs:
+        d.mkdir(parents=True, exist_ok=True)
+
+    # Copy template config files from PROJECT_ROOT/config if missing in user home
+    repo_config_dir = PROJECT_ROOT / "config"
+    if repo_config_dir.exists():
+        for item in ["jarvis.yaml", "providers.json", "models.json"]:
+            src_file = repo_config_dir / item
+            dst_file = config_dir / item
+            if src_file.exists() and not dst_file.exists():
+                try:
+                    shutil.copy2(src_file, dst_file)
+                    logger.info(f"Initialized default config file {dst_file} from repository template.")
+                except Exception as e:
+                    logger.warning(f"Failed to copy config template {src_file} to {dst_file}: {e}")
+
+    # Copy .env template to ~/.jarvis/.env if missing
+    user_env_file = home_dir / ".env"
+    if not user_env_file.exists():
+        repo_env = PROJECT_ROOT / ".env"
+        repo_env_example = PROJECT_ROOT / ".env.example"
+        src_env = repo_env if repo_env.exists() else (repo_env_example if repo_env_example.exists() else None)
+        if src_env:
+            try:
+                shutil.copy2(src_env, user_env_file)
+                logger.info(f"Initialized user environment file {user_env_file} from {src_env.name}.")
+            except Exception as e:
+                logger.warning(f"Failed to copy env template to {user_env_file}: {e}")
+
+    # Copy models_dev_cache.json from PROJECT_ROOT/data if missing in user workspace
+    repo_cache_file = PROJECT_ROOT / "data" / "models_dev_cache.json"
+    user_cache_file = workspace_dir / "models_dev_cache.json"
+    if repo_cache_file.exists() and not user_cache_file.exists():
+        try:
+            shutil.copy2(repo_cache_file, user_cache_file)
+            logger.info(f"Initialized models_dev_cache.json in {user_cache_file} from repository data.")
+        except Exception as e:
+            logger.warning(f"Failed to copy models_dev_cache.json template to {user_cache_file}: {e}")
+
+    # Sync legacy sessions if present
+    from jarvis.core.paths import sync_legacy_sessions
+    sync_legacy_sessions()
+
+    return home_dir
+
+
+def resolve_data_path(path_input: str | Path) -> Path:
+    """Resolve a data or storage path relative to ~/.jarvis/workspace."""
+    from jarvis.core.paths import resolve_data_path as _resolve_data_path
+    return _resolve_data_path(path_input)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -65,7 +152,7 @@ class LongTermMemoryConfig(BaseModel):
     auto_extract: bool = True
     provider: str = ""          # Provider used for extraction ("" = active provider)
     model: str = ""             # Model used for extraction ("" = active model)
-    storage_path: str = "data/long_term_memory"
+    storage_path: str = "workspace/long_term_memory"
 
 
 class VectorMemoryConfig(BaseModel):
@@ -77,8 +164,8 @@ class VectorMemoryConfig(BaseModel):
     chunk_size: int = 512
     chunk_overlap: int = 50
     collection_name: str = "jarvis_memory"
-    storage_path: str = "data/vector_store"
-    knowledge_base_path: str = "data/knowledge_base"
+    storage_path: str = "workspace/vector_store"
+    knowledge_base_path: str = "workspace/knowledge_base"
 
 
 class MemoryConfig(BaseModel):
@@ -115,6 +202,8 @@ class ToolsConfig(BaseModel):
             "append_file",
             "make_directory",
             "delete_file",
+            "list_skills",
+            "get_skill",
         ]
     )
     categories: dict[str, bool] = Field(
@@ -122,83 +211,20 @@ class ToolsConfig(BaseModel):
     )
 
 
+class SkillsConfig(BaseModel):
+    """Skills subsystem settings."""
+    enabled: bool = True
+    skills_dir: str = "src/jarvis/skills"
+    disabled_skills: list[str] = Field(default_factory=list)
+
 
 class MCPConfig(BaseModel):
-    """MCP subsystem settings.
-
-    All servers under ``src/jarvis/mcp/servers/`` are auto-registered and
-    enabled by default. Use ``servers`` to enable/disable or override
-    individual servers from ``jarvis.yaml``:
-
-    .. code-block:: yaml
-
-        mcp:
-          enabled: true
-          servers:
-            gmail:
-              enabled: false          # disable a server
-            telegram:
-              command: python         # override launch config
-              env:
-                TELEGRAM_API_ID: "..."
-    """
-
+    """MCP subsystem settings."""
     enabled: bool = True
     auto_start: list[str] = Field(default_factory=list)
-    timeout: int = 30
+    timeout: int = 90
     servers_config: str = "src/jarvis/mcp/servers.json"
-    servers: dict[str, MCPServerOverride] = Field(default_factory=dict)
-
-    @field_validator("servers", mode="before")
-    @classmethod
-    def _coerce_servers(cls, value: Any) -> Any:
-        """Coerce an empty ``servers:`` key (only comments) to an empty dict."""
-        if value is None:
-            return {}
-        return value
-
-
-class MCPServerOverride(BaseModel):
-    """Per-server MCP override config (from ``jarvis.yaml``)."""
-
-    enabled: bool | None = None
-    command: str | None = None
-    args: list[str] | None = None
-    env: dict[str, str] = Field(default_factory=dict)
-    transport: str | None = None
-    timeout: int | None = None
-    description: str | None = None
-    url: str | None = None
-
-
-class TUIConfig(BaseModel):
-    """TUI settings."""
-    theme: str = "jarvis"
-    show_tool_output: bool = True
-    show_thinking: bool = False
-
-
-class WebConfig(BaseModel):
-    """Web UI settings."""
-    host: str = "0.0.0.0"
-    port: int = 8000
-    debug: bool = False
-    theme: str = "dark"
-
-
-class GUIConfig(BaseModel):
-    """GUI settings."""
-    theme: str = "dark"
-    window_size: str = "1200x800"
-    opacity: float = 0.95
-
-
-class UIConfig(BaseModel):
-    """UI settings."""
-    default: str = "tui"
-    tui: TUIConfig = Field(default_factory=TUIConfig)
-    web: WebConfig = Field(default_factory=WebConfig)
-    gui: GUIConfig = Field(default_factory=GUIConfig)
+    servers: dict[str, Any] = Field(default_factory=dict)
 
 
 class TTSConfig(BaseModel):
@@ -228,21 +254,21 @@ class STTConfig(BaseModel):
     sample_rate: int = 16000                   # recording sample rate (Hz)
 
 
-class VoiceAudioConfig(BaseModel):
-    """Audio device settings for the voice subsystem."""
-    input_device: str | int | None = None      # microphone device (None = default)
-    output_device: str | int | None = None     # speaker device (None = default)
-    sample_rate: int = 44100                   # playback sample rate (Hz)
+class AudioConfig(BaseModel):
+    """Audio hardware device settings."""
+    input_device: int | str | None = None
+    output_device: int | str | None = None
+    sample_rate: int = 44100
 
 
 class VoiceConfig(BaseModel):
-    """Voice subsystem settings (TTS / STT / audio)."""
-    enabled: bool = True
-    mode: str = "text"                         # text | voice (default mode)
-    auto_send_msg: bool = True                 # auto send transcribed message (true) or place in prompt box (false)
+    """Voice subsystem settings."""
+    enabled: bool = False
+    mode: str = "text"                         # text | voice | push_to_talk
+    auto_send_msg: bool = True                 # automatically send STT text as message
     tts: TTSConfig = Field(default_factory=TTSConfig)
     stt: STTConfig = Field(default_factory=STTConfig)
-    audio: VoiceAudioConfig = Field(default_factory=VoiceAudioConfig)
+    audio: AudioConfig = Field(default_factory=AudioConfig)
 
     @field_validator("auto_send_msg", mode="before")
     @classmethod
@@ -256,6 +282,36 @@ class VoiceConfig(BaseModel):
             if clean in ("false", "0", "no", "off", "flase"):
                 return False
         return True
+
+
+class TUIConfig(BaseModel):
+    """TUI display settings."""
+    theme: str = "dark"
+    show_tool_output: bool = True
+    show_thinking: bool = False
+
+
+class WebConfig(BaseModel):
+    """Web UI settings."""
+    host: str = "0.0.0.0"
+    port: int = 8000
+    debug: bool = False
+    theme: str = "dark"
+
+
+class GUIConfig(BaseModel):
+    """GUI settings."""
+    theme: str = "dark"
+    window_size: str = "1200x800"
+    opacity: float = 0.95
+
+
+class UIConfig(BaseModel):
+    """UI settings."""
+    default: str = "tui"
+    tui: TUIConfig = Field(default_factory=TUIConfig)
+    web: WebConfig = Field(default_factory=WebConfig)
+    gui: GUIConfig = Field(default_factory=GUIConfig)
 
 
 class JarvisMetaConfig(BaseModel):
@@ -275,6 +331,7 @@ class JarvisConfig(BaseModel):
     provider: ProviderConfig = Field(default_factory=ProviderConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
@@ -284,22 +341,37 @@ class JarvisConfig(BaseModel):
         """Load configuration from YAML file and environment.
 
         Args:
-            config_path: Path to jarvis.yaml. If None, uses default location.
+            config_path: Path to jarvis.yaml. If None, uses ~/.jarvis/config/jarvis.yaml (or repo fallback).
 
         Returns:
             Fully loaded JarvisConfig instance.
         """
-        # Load .env file
-        env_path = PROJECT_ROOT / ".env"
-        if env_path.exists():
-            load_dotenv(env_path)
-            logger.info(f"Loaded environment from {env_path}")
+        # Ensure ~/.jarvis home directory structure & .env file exist
+        ensure_jarvis_home()
 
-        # Load YAML config
+        # Load environment variables (.env) from repo root and user home (~/.jarvis/.env overrides repo)
+        repo_env_path = PROJECT_ROOT / ".env"
+        home_env_path = get_jarvis_home() / ".env"
+
+        if repo_env_path.exists():
+            load_dotenv(repo_env_path)
+            logger.info(f"Loaded environment from {repo_env_path}")
+        if home_env_path.exists():
+            load_dotenv(home_env_path, override=True)
+            logger.info(f"Loaded environment from {home_env_path}")
+
+        # Determine YAML config path
         if config_path is None:
-            config_path = CONFIG_DIR / "jarvis.yaml"
+            user_config_path = get_jarvis_home() / "config" / "jarvis.yaml"
+            repo_config_path = PROJECT_ROOT / "config" / "jarvis.yaml"
+            if user_config_path.exists():
+                config_path = user_config_path
+            elif repo_config_path.exists():
+                config_path = repo_config_path
+            else:
+                config_path = user_config_path
 
-        if config_path.exists():
+        if config_path and config_path.exists():
             with open(config_path, encoding="utf-8") as f:
                 raw_config = yaml.safe_load(f) or {}
             logger.info(f"Loaded config from {config_path}")
@@ -313,10 +385,10 @@ class JarvisConfig(BaseModel):
         """Save current configuration to YAML file.
 
         Args:
-            config_path: Path to save to. If None, uses default location.
+            config_path: Path to save to. If None, uses ~/.jarvis/config/jarvis.yaml.
         """
         if config_path is None:
-            config_path = CONFIG_DIR / "jarvis.yaml"
+            config_path = get_jarvis_home() / "config" / "jarvis.yaml"
 
         config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(config_path, "w", encoding="utf-8") as f:
@@ -330,23 +402,15 @@ class JarvisConfig(BaseModel):
         logger.info(f"Config saved to {config_path}")
 
     def get_api_key(self, env_var: str) -> str | None:
-        """Get an API key from environment variables.
-
-        Args:
-            env_var: The environment variable name.
-
-        Returns:
-            The API key value, or None if not set.
-        """
+        """Get an API key from environment variables."""
         return os.getenv(env_var)
 
     def load_providers(self) -> list[dict[str, Any]]:
-        """Load provider definitions from providers.json.
+        """Load provider definitions from providers.json."""
+        providers_path = get_jarvis_home() / "config" / "providers.json"
+        if not providers_path.exists():
+            providers_path = PROJECT_ROOT / "config" / "providers.json"
 
-        Returns:
-            List of provider configuration dictionaries.
-        """
-        providers_path = CONFIG_DIR / "providers.json"
         if providers_path.exists():
             with open(providers_path, encoding="utf-8") as f:
                 data: dict[str, Any] = json.load(f)
@@ -356,12 +420,11 @@ class JarvisConfig(BaseModel):
         return []
 
     def load_models(self) -> dict[str, list[dict[str, Any]]]:
-        """Load model catalog from models.json.
+        """Load model catalog from models.json."""
+        models_path = get_jarvis_home() / "config" / "models.json"
+        if not models_path.exists():
+            models_path = PROJECT_ROOT / "config" / "models.json"
 
-        Returns:
-            Dictionary mapping provider names to lists of model configs.
-        """
-        models_path = CONFIG_DIR / "models.json"
         if models_path.exists():
             with open(models_path, encoding="utf-8") as f:
                 data: dict[str, Any] = json.load(f)
@@ -372,32 +435,40 @@ class JarvisConfig(BaseModel):
 
 
 def save_api_key_to_env(env_var_name: str, key_value: str) -> None:
-    """Save an API key to os.environ and persist it to the project's .env file."""
+    """Save an API key to os.environ and persist it to ~/.jarvis/.env and repo .env."""
     os.environ[env_var_name] = key_value
-    env_path = PROJECT_ROOT / ".env"
 
-    lines: list[str] = []
-    if env_path.exists():
-        with open(env_path, encoding="utf-8") as f:
-            lines = f.readlines()
+    env_paths = [
+        get_jarvis_home() / ".env",
+        PROJECT_ROOT / ".env",
+    ]
 
-    updated = False
-    new_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith(f"{env_var_name}=") or stripped.startswith(f"export {env_var_name}="):
-            new_lines.append(f"{env_var_name}={key_value}\n")
-            updated = True
-        else:
-            new_lines.append(line)
+    for env_path in env_paths:
+        try:
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            lines: list[str] = []
+            if env_path.exists():
+                with open(env_path, encoding="utf-8") as f:
+                    lines = f.readlines()
 
-    if not updated:
-        if new_lines and not new_lines[-1].endswith("\n"):
-            new_lines.append("\n")
-        new_lines.append(f"{env_var_name}={key_value}\n")
+            updated = False
+            new_lines: list[str] = []
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith(f"{env_var_name}=") or stripped.startswith(f"export {env_var_name}="):
+                    new_lines.append(f"{env_var_name}={key_value}\n")
+                    updated = True
+                else:
+                    new_lines.append(line)
 
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
+            if not updated:
+                if new_lines and not new_lines[-1].endswith("\n"):
+                    new_lines.append("\n")
+                new_lines.append(f"{env_var_name}={key_value}\n")
 
-    logger.info(f"Saved API key for {env_var_name} to {env_path}")
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.writelines(new_lines)
 
+            logger.info(f"Saved API key for {env_var_name} to {env_path}")
+        except Exception as e:
+            logger.warning(f"Failed to persist API key to {env_path}: {e}")

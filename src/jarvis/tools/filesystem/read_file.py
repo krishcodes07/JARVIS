@@ -79,13 +79,13 @@ class ReadFileTool(BaseTool):
             return "Error: File path is required."
 
         try:
-            filepath = safe_path(path)
-            if not os.path.exists(filepath):
+            filepath = self.resolve_path(path)
+            if not filepath.exists():
                 return f"Error: File not found: {path}"
-            if not os.path.isfile(filepath):
+            if not filepath.is_file():
                 return f"Error: Path is a directory, not a file: {path}"
 
-            total_bytes = os.path.getsize(filepath)
+            total_bytes = filepath.stat().st_size
 
             with open(filepath, encoding=encoding, errors="replace") as f:
                 lines = f.readlines()

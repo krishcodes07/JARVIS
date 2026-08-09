@@ -95,8 +95,8 @@ class EditFileTool(BaseTool):
             return "Error: File path is required."
 
         try:
-            filepath = safe_path(path)
-            if not os.path.exists(filepath):
+            filepath = self.resolve_path(path)
+            if not filepath.exists():
                 return f"Error: File not found: {path}"
 
             with open(filepath, encoding=encoding, errors="replace") as f:

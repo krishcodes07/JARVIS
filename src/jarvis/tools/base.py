@@ -98,6 +98,17 @@ class BaseTool(ABC):
         """
         self.config: Any = config
 
+    def resolve_path(self, path: str | Path) -> Path:
+        """Resolve a path against the sandbox if enabled, or return absolute path."""
+        from pathlib import Path
+        from jarvis.tools.sandbox import PathSandbox
+
+        cfg = getattr(self, "config", None)
+        if cfg and hasattr(cfg, "tools") and cfg.tools and hasattr(cfg.tools, "sandbox") and cfg.tools.sandbox.enabled:
+            return PathSandbox.from_config(cfg).resolve(path)
+
+        return Path(path).expanduser().resolve()
+
     @abstractmethod
     async def execute(self, **kwargs: Any) -> str:
         """Execute the tool with the given arguments.

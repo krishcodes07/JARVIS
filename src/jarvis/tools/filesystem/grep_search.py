@@ -71,8 +71,8 @@ class GrepSearchTool(BaseTool):
             return "Error: Search query parameter is required."
 
         try:
-            target_path = safe_path(path)
-            if not os.path.exists(target_path):
+            target_path = self.resolve_path(path)
+            if not target_path.exists():
                 return f"Error: Target path not found: {path}"
 
             regex = re.compile(query, re.IGNORECASE)
