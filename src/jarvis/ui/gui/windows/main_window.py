@@ -1,6 +1,8 @@
-"""Main application composition for the JARVIS interface."""
+"""Main application composition shell for the JARVIS GUI interface."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -16,7 +18,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from jarvis_gui.components import (
+from jarvis.ui.gui.config import UIConfig
+from jarvis.ui.gui.services.engine_service import JarvisAIService
+from jarvis.ui.gui.store import ConversationStore
+from jarvis.ui.gui.themes import build_stylesheet, get_theme
+from jarvis.ui.gui.widgets import (
     ConversationView,
     GlowIconButton,
     JarvisOrb,
@@ -24,27 +30,28 @@ from jarvis_gui.components import (
     PromptBar,
     SettingsPage,
 )
-from jarvis_gui.config import UIConfig
-from jarvis_gui.conversation_store import ConversationStore
-from jarvis_gui.dummy_ai import DummyAIService
-from jarvis_gui.themes import Theme, build_stylesheet, get_theme
 
 
 class JarvisWindow(QMainWindow):
-    """Responsive shell that wires reusable widgets to services and settings."""
+    """Responsive application shell that wires widgets to services and settings."""
 
     def __init__(
         self,
         *,
         config: UIConfig | None = None,
-        ai_service: DummyAIService | None = None,
+        ai_service: Any | None = None,
+        engine: Any | None = None,
         conversation_store: ConversationStore | None = None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self.config = config or UIConfig.load()
         self.theme = get_theme(self.config.theme_name, self.config.accent_name)
-        self.ai_service = ai_service or DummyAIService(parent=self)
+        self.engine = engine
+        if ai_service is not None:
+            self.ai_service = ai_service
+        else:
+            self.ai_service = JarvisAIService(engine=engine, parent=self)
         self.conversation_store = conversation_store or ConversationStore.default()
         self.current_conversation_id: str | None = None
         self._pending_counts: dict[str, int] = {}
@@ -85,7 +92,9 @@ class JarvisWindow(QMainWindow):
 
         content = QFrame()
         self.assistant_page = content
-        content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        content.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 10)
         content_layout.setSpacing(7)
@@ -103,9 +112,7 @@ class JarvisWindow(QMainWindow):
         header.addWidget(self.mode_badge)
         header.addStretch(1)
 
-        self.settings_button = GlowIconButton(
-            "settings", self.theme, size=46
-        )
+        self.settings_button = GlowIconButton("settings", self.theme, size=46)
         self.settings_button.setToolTip("Open settings")
         header.addWidget(self.settings_button)
         content_layout.addLayout(header)
@@ -135,7 +142,9 @@ class JarvisWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self.menu_button.toggled.connect(self._toggle_navigation)
         self.settings_button.clicked.connect(self._show_settings_page)
-        self.navigation.close_requested.connect(lambda: self.menu_button.setChecked(False))
+        self.navigation.close_requested.connect(
+            lambda: self.menu_button.setChecked(False)
+        )
         self.navigation.new_chat_requested.connect(self.start_new_chat)
         self.navigation.conversation_selected.connect(self.open_conversation)
         self.settings.back_requested.connect(self._show_assistant_page)
@@ -174,7 +183,9 @@ class JarvisWindow(QMainWindow):
             return
         self._attachment_path = path
         filename = path.replace("\\", "/").rsplit("/", 1)[-1]
-        self.prompt_bar.input.setPlaceholderText(f"Attached: {filename} — ask a question…")
+        self.prompt_bar.input.setPlaceholderText(
+            f"Attached: {filename} — ask a question…"
+        )
         self.orb.set_status("ATTACHMENT READY")
 
     def submit_prompt(self, prompt: str) -> None:

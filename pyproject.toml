@@ -48,6 +48,7 @@ dependencies = [
     "pyperclip>=1.8.0",
 
     # GUI
+    "pyside6>=6.5.0",
     "customtkinter>=5.2",
 ]
 

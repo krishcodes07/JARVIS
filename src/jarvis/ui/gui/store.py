@@ -1,4 +1,4 @@
-"""Durable local storage for conversations and their messages."""
+"""Durable local storage for GUI conversations and messages."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class ConversationMessage:
 
 
 class ConversationStore:
-    """Small SQLite repository used independently from the assistant backend."""
+    """SQLite repository for storing GUI chat histories."""
 
     def __init__(self, database_path: str | Path) -> None:
         self.database_path = Path(database_path)
@@ -169,4 +169,3 @@ class ConversationStore:
             )
             for row in rows
         ]
-

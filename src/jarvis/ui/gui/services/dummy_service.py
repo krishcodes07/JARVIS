@@ -1,4 +1,4 @@
-"""Replaceable asynchronous dummy assistant service."""
+"""Canned response mock AI service for GUI testing/offline operation."""
 
 from __future__ import annotations
 
@@ -29,8 +29,7 @@ class DummyAIService(QObject):
         if "time" in normalized:
             return "The clock module is still in demo mode. Connect the real tool layer to return live time data."
         if any(word in normalized for word in ("code", "python", "debug")):
-            return "I can help with that. This is a dummy response for now; the UI is ready to receive output from your Python assistant backend."
+            return "I can help with that. This response is running in fallback mode; connect the live JARVIS engine for execution."
         if any(word in normalized for word in ("weather", "temperature")):
-            return "Weather tools are not connected in this prototype, but the response surface is working correctly."
-        return f'I received: “{prompt}”. The AI service is currently mocked and can be replaced without changing the UI components.'
-
+            return "Weather tools are available when connected to the live engine service."
+        return f'I received: “{prompt}”. The UI is ready and functioning normally.'
