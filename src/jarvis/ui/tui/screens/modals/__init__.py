@@ -10,6 +10,7 @@ from jarvis.ui.tui.screens.modals.connect_modal import ConnectModal
 from jarvis.ui.tui.screens.modals.debug_modal import DebugModal
 from jarvis.ui.tui.screens.modals.help_modal import HelpModal
 from jarvis.ui.tui.screens.modals.mcp_modal import MCPModal
+from jarvis.ui.tui.screens.modals.message_actions_modal import MessageActionsModal
 from jarvis.ui.tui.screens.modals.model_modal import ModelModal
 from jarvis.ui.tui.screens.modals.session_modal import SessionModal
 from jarvis.ui.tui.screens.modals.theme_modal import ThemeModal
@@ -23,6 +24,7 @@ __all__ = [
     "DebugModal",
     "HelpModal",
     "MCPModal",
+    "MessageActionsModal",
     "ModelModal",
     "SessionModal",
     "ThemeModal",

@@ -31,7 +31,7 @@ class ApiKeyModal(ModalScreen[str | None]):
     }
 
     #api-key-card {
-        width: 54;
+        width: 60;
         height: auto;
         background: $surface;
         padding: 1 2;
@@ -83,6 +83,9 @@ class ApiKeyModal(ModalScreen[str | None]):
         provider_name: str,
         api_key_env: str,
         engine: JarvisEngine | None = None,
+        title: str | None = None,
+        placeholder: str | None = None,
+        password: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -91,11 +94,14 @@ class ApiKeyModal(ModalScreen[str | None]):
         self.api_key_env = api_key_env
         self.engine = engine
 
-        self.title_widget = Static(f"API key", id="api-key-title")
+        title_text = title if title else "API key"
+        placeholder_text = placeholder if placeholder else "API key"
+
+        self.title_widget = Static(title_text, id="api-key-title")
         self.esc_widget = Static("esc", id="api-key-esc")
         self.input_field = Input(
-            placeholder="API key",
-            password=True,
+            placeholder=placeholder_text,
+            password=password,
             id="api-key-input",
         )
         self.footer_widget = Static(self._build_footer(), id="api-key-footer")

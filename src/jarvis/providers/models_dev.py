@@ -102,16 +102,65 @@ async def fetch_models_dev_data() -> dict[str, Any]:
 
 def get_provider_env_var(provider_id: str, provider_data: dict[str, Any]) -> str:
     """Determine primary environment variable name for a provider."""
-    envs = provider_data.get("env")
-    if envs and isinstance(envs, list) and len(envs) > 0:
-        return str(envs[0]).strip()
+    envs = get_provider_env_vars(provider_id, provider_data)
+    return envs[0]
 
-    clean_id = provider_id.upper().replace("-", "_").replace(".", "_")
-    return f"{clean_id}_API_KEY"
+
+def get_provider_env_vars(
+    provider_id: str,
+    provider_data: dict[str, Any] | None = None,
+    filter_synonyms: bool = True,
+) -> list[str]:
+    """Determine all environment variable names required for a provider.
+
+    For example, Cloudflare requires ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_KEY"].
+    If *filter_synonyms* is True, multiple alternative API keys (e.g.
+    GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, GEMINI_API_KEY) are deduplicated
+    so the user is only prompted for the 1st one.
+    """
+    if provider_data is None:
+        cache = load_models_dev_cache()
+        provider_data = cache.get(provider_id, {})
+
+    raw_envs: list[str] = []
+    if provider_data and isinstance(provider_data.get("env"), list):
+        raw_envs = [str(e).strip() for e in provider_data["env"] if str(e).strip()]
+
+    if not raw_envs:
+        clean_id = provider_id.upper().replace("-", "_").replace(".", "_")
+        raw_envs = [f"{clean_id}_API_KEY"]
+
+    if not filter_synonyms:
+        return raw_envs
+
+    # Filter out duplicate API_KEY synonyms (keep only the 1st env containing "API_KEY")
+    result: list[str] = []
+    seen_api_key = False
+    for env in raw_envs:
+        if "API_KEY" in env.upper():
+            if not seen_api_key:
+                result.append(env)
+                seen_api_key = True
+        else:
+            result.append(env)
+
+    return result
+
+
+def format_env_var_label(env_var: str) -> str:
+    """Format an environment variable name into a clean, human-readable title by splitting by '_' and capitalizing each word.
+
+    Examples:
+        CLOUDFLARE_ACCOUNT_ID -> Cloudflare Account Id
+        CLOUDFLARE_API_KEY -> Cloudflare Api Key
+    """
+    if not env_var:
+        return ""
+    return " ".join(part.capitalize() for part in env_var.split("_") if part)
 
 
 def is_provider_connected(provider_id: str, provider_data: dict[str, Any] | None = None) -> bool:
-    """Check whether an API key for the provider is set and non-empty in os.environ or .env."""
+    """Check whether all required API keys/env vars for the provider are set and non-empty in os.environ or .env."""
     from dotenv import load_dotenv
     from jarvis.core.config import PROJECT_ROOT, get_jarvis_home
 
@@ -127,20 +176,29 @@ def is_provider_connected(provider_id: str, provider_data: dict[str, Any] | None
         cache = load_models_dev_cache()
         provider_data = cache.get(provider_id, {})
 
-    envs: list[str] = []
-    if provider_data and isinstance(provider_data.get("env"), list):
-        envs = [str(e).strip() for e in provider_data["env"]]
+    raw_envs = get_provider_env_vars(provider_id, provider_data, filter_synonyms=False)
 
-    if not envs:
-        clean_id = provider_id.upper().replace("-", "_").replace(".", "_")
-        envs = [f"{clean_id}_API_KEY"]
+    api_key_group = [e for e in raw_envs if "API_KEY" in e.upper()]
+    non_api_key_group = [e for e in raw_envs if "API_KEY" not in e.upper()]
 
-    for env_var in envs:
+    # 1. Non-API-KEY required env vars (e.g. CLOUDFLARE_ACCOUNT_ID): ALL must be set
+    for env_var in non_api_key_group:
         val = os.getenv(env_var, "").strip()
-        if val and not val.startswith("sk-..."):
-            return True
+        if not val:
+            return False
 
-    return False
+    # 2. API-KEY env vars (e.g. GOOGLE_API_KEY / GEMINI_API_KEY): At least ONE must be set
+    if api_key_group:
+        has_any_key = False
+        for env_var in api_key_group:
+            val = os.getenv(env_var, "").strip()
+            if val and not val.startswith("sk-..."):
+                has_any_key = True
+                break
+        if not has_any_key:
+            return False
+
+    return True
 
 
 def get_provider_base_url(provider_id: str, provider_data: dict[str, Any]) -> str:

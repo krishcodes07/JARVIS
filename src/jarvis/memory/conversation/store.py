@@ -99,6 +99,41 @@ class ConversationStore(BaseMemory):
             p.stem for p in self._storage_dir.glob("*.json")
         ]
 
+    async def truncate(self, session_id: str, keep_count: int) -> None:
+        """Truncate conversation history, keeping only the first *keep_count* messages.
+
+        Useful for reverting messages: removes everything from index
+        ``keep_count`` onward and auto-saves.
+
+        Args:
+            session_id: The session identifier.
+            keep_count: Number of messages to keep from the start.
+        """
+        if session_id not in self._buffers:
+            self._buffers[session_id] = await self._load_session(session_id)
+
+        self._buffers[session_id] = self._buffers[session_id][:keep_count]
+        await self._save_session(session_id)
+
+    async def fork(
+        self, source_session_id: str, new_session_id: str, keep_count: int
+    ) -> None:
+        """Create a new session by copying the first *keep_count* messages from *source*.
+
+        The source session is not modified.
+
+        Args:
+            source_session_id: Session to copy messages from.
+            new_session_id: The new session identifier.
+            keep_count: Number of messages to copy from the start.
+        """
+        if source_session_id not in self._buffers:
+            self._buffers[source_session_id] = await self._load_session(source_session_id)
+
+        copied = list(self._buffers[source_session_id][:keep_count])
+        self._buffers[new_session_id] = copied
+        await self._save_session(new_session_id)
+
     # ─── Private helpers ──────────────────────────────────────
 
     async def _load_session(self, session_id: str) -> list[dict[str, Any]]:

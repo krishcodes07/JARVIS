@@ -9,6 +9,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from textual import events, on, work
@@ -18,7 +20,11 @@ from textual.widgets import Button, Input, TextArea
 from textual.worker import get_current_worker
 
 from jarvis.core.paths import get_sessions_dir
-from jarvis.providers.models_dev import get_model_context_limit
+from jarvis.providers.models_dev import (
+    format_env_var_label,
+    get_model_context_limit,
+    get_provider_env_vars,
+)
 from jarvis.ui.tui.screens.modals import (
     ApiKeyModal,
     ConfigModal,
@@ -26,6 +32,7 @@ from jarvis.ui.tui.screens.modals import (
     DebugModal,
     HelpModal,
     MCPModal,
+    MessageActionsModal,
     ModelModal,
     SessionModal,
     ThemeModal,
@@ -36,6 +43,7 @@ from jarvis.ui.tui.widgets import (
     ChatViewWidget,
     CommandPopoverWidget,
     HeaderWidget,
+    MessageWidget,
     NotificationToast,
     PromptBoxWidget,
     PromptInputTextArea,
@@ -80,6 +88,7 @@ class MainScreen(Screen):
         self._current_worker = None
         self._prompt_history: list[str] = []
         self._history_index: int = -1
+        self._git_checkpoints: dict[int, dict[str, Any]] = {}
 
     def compose(self):
         yield self.header
@@ -329,6 +338,10 @@ class MainScreen(Screen):
             self.chat_view.add_error_message("JARVIS Engine not connected.")
             return
 
+        # Save git checkpoint before processing (for revert file changes)
+        msg_idx = self.chat_view._message_counter - 1
+        self._save_git_checkpoint(msg_idx)
+
         self._current_worker = get_current_worker()
         self._is_generating = True
         self.status_bar.set_generating(True)
@@ -348,8 +361,6 @@ class MainScreen(Screen):
             self.chat_view.add_tool_call(f"APPROVAL REQUIRED: {tool_name}", args_str)
             return True
 
-        model_name = self.engine.config.provider.model if self.engine.config else "JARVIS"
-
         try:
             async for chunk in self.engine.stream_chat(
                 query,
@@ -359,15 +370,18 @@ class MainScreen(Screen):
             ):
                 self.chat_view.append_assistant_chunk(chunk)
 
+            model_name = self.engine.last_used_model
             self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
             self._update_context_display()
 
         except asyncio.CancelledError:
             logger.info("Chat stream cancelled by user.")
+            model_name = self.engine.last_used_model if self.engine else "JARVIS"
             self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
             self._update_context_display()
         except Exception as e:
             logger.exception("Error during chat processing")
+            model_name = self.engine.last_used_model if self.engine else "JARVIS"
             self.chat_view.finish_assistant_stream(mode="", model_name=model_name)
             self.chat_view.add_error_message(f"Error: {e}")
             self._update_context_display()
@@ -518,8 +532,11 @@ class MainScreen(Screen):
         if cmd == "/new":
             new_session_id = "N/A"
             if self.engine:
+                # Clean up empty session file before switching
                 if self.engine.session:
+                    old_sid = self.engine.session.session_id
                     await self.engine.session.end()
+                    self._cleanup_empty_session(old_sid)
                 from jarvis.core.session import Session
                 self.engine.session = Session(engine=self.engine)
                 new_session_id = self.engine.session.session_id
@@ -528,6 +545,7 @@ class MainScreen(Screen):
             self.header.show_header()
             self.prompt_box.show_hints()
             self.status_bar.clear_context_usage()
+            self._git_checkpoints.clear()
             self.show_toast(
                 f"New conversation session created (ID: {new_session_id})",
                 title="New Session",
@@ -640,6 +658,239 @@ class MainScreen(Screen):
             self.prompt_box.show_hints()
             self.status_bar.clear_context_usage()
 
+    # ─── Message Actions (Revert / Copy / Fork) ───
+
+    @on(MessageWidget.ActionRequested)
+    def on_message_action_requested(self, event: MessageWidget.ActionRequested) -> None:
+        """Handle click on a user message — open the Message Actions modal."""
+        self._dismiss_active_modals()
+        self.app.push_screen(
+            MessageActionsModal(
+                message_text=event.message_text,
+                message_index=event.message_index,
+            ),
+            self._handle_message_action,
+        )
+
+    def _interrupt_active_generation(self) -> None:
+        """Cancel any in-progress LLM stream and reset generation state."""
+        if self._is_generating:
+            if self._current_worker and not self._current_worker.is_finished:
+                self._current_worker.cancel()
+            self._is_generating = False
+            self.status_bar.set_generating(False)
+
+        if self.voice_controller.is_active:
+            self.voice_controller.stop()
+            self.prompt_box.set_listening_state(False)
+
+    async def _count_memory_messages_before(self, user_msg_index: int) -> int:
+        """Count how many memory messages exist before the Nth user message.
+
+        The conversation store saves messages sequentially (user, assistant,
+        user, assistant, ...). This finds how many total stored messages
+        precede the user message at *user_msg_index* so we know where to
+        truncate the buffer.
+        """
+        if not self.engine or not self.engine.session:
+            return 0
+        session_id = self.engine.session.session_id
+        if (
+            not self.engine.memory_manager
+            or not self.engine.memory_manager.conversation
+        ):
+            return 0
+
+        conv = self.engine.memory_manager.conversation
+        # Ensure buffer is loaded from disk before counting
+        if session_id not in conv._buffers:
+            conv._buffers[session_id] = await conv._load_session(session_id)
+        buf = conv._buffers.get(session_id, [])
+
+        user_count = 0
+        for i, msg in enumerate(buf):
+            role = msg.get("role", "")
+            # Skip system / session-title messages
+            if role == "system" or msg.get("_session_title"):
+                continue
+            if role == "user":
+                if user_count == user_msg_index:
+                    return i  # truncate point: keep everything before this index
+                user_count += 1
+        return len(buf)
+
+    def _cleanup_empty_session(self, session_id: str) -> None:
+        """Delete a session file if it is empty (contains [] or no messages)."""
+        try:
+            filepath = get_sessions_dir() / f"{session_id}.json"
+            if filepath.exists():
+                with open(filepath, encoding="utf-8") as f:
+                    data = json.load(f)
+                if not data:  # empty list
+                    filepath.unlink()
+                    logger.info(f"Cleaned up empty session file: {session_id}")
+        except Exception:
+            pass
+
+    def _save_git_checkpoint(self, msg_index: int) -> None:
+        """Save git working tree state before processing a user message.
+
+        Captures a lightweight stash-like ref plus the list of untracked files
+        so that revert can restore the workspace to this point.
+        """
+        try:
+            cwd = str(Path.cwd())
+            # Check if we're in a git repo
+            res = subprocess.run(
+                ["git", "rev-parse", "--is-inside-work-tree"],
+                capture_output=True, text=True, cwd=cwd, timeout=5,
+            )
+            if res.returncode != 0:
+                return
+
+            # Get current HEAD
+            head_res = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                capture_output=True, text=True, cwd=cwd, timeout=5,
+            )
+            head_ref = head_res.stdout.strip()
+
+            # Create a stash-like ref (doesn't change working tree)
+            stash_res = subprocess.run(
+                ["git", "stash", "create"],
+                capture_output=True, text=True, cwd=cwd, timeout=10,
+            )
+            stash_ref = stash_res.stdout.strip()
+
+            # List untracked files
+            untracked_res = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                capture_output=True, text=True, cwd=cwd, timeout=5,
+            )
+            raw = untracked_res.stdout.strip()
+            untracked = set(raw.split("\n")) if raw else set()
+
+            self._git_checkpoints[msg_index] = {
+                "stash_ref": stash_ref,
+                "head_ref": head_ref,
+                "untracked_files": untracked,
+                "cwd": cwd,
+            }
+        except Exception:
+            pass
+
+    def _restore_git_checkpoint(self, msg_index: int) -> bool:
+        """Restore workspace to the git state captured at *msg_index*.
+
+        Returns True if restoration succeeded.
+        """
+        checkpoint = self._git_checkpoints.get(msg_index)
+        if not checkpoint:
+            return False
+
+        cwd = checkpoint["cwd"]
+        stash_ref = checkpoint.get("stash_ref", "")
+        head_ref = checkpoint.get("head_ref", "")
+        old_untracked: set[str] = checkpoint.get("untracked_files", set())
+
+        try:
+            # Restore tracked files to HEAD first
+            subprocess.run(
+                ["git", "checkout", "HEAD", "--", "."],
+                capture_output=True, text=True, cwd=cwd, timeout=15,
+            )
+
+            # Re-apply the pre-message working tree state if there was one
+            if stash_ref and stash_ref != head_ref:
+                subprocess.run(
+                    ["git", "stash", "apply", stash_ref],
+                    capture_output=True, text=True, cwd=cwd, timeout=15,
+                )
+
+            # Delete newly created untracked files (files that weren't there before)
+            current_res = subprocess.run(
+                ["git", "ls-files", "--others", "--exclude-standard"],
+                capture_output=True, text=True, cwd=cwd, timeout=5,
+            )
+            raw = current_res.stdout.strip()
+            current_untracked = set(raw.split("\n")) if raw else set()
+
+            new_files = current_untracked - old_untracked
+            for f in new_files:
+                fp = Path(cwd) / f
+                if fp.exists() and fp.is_file():
+                    fp.unlink()
+
+            # Purge checkpoints from the reverted index onward
+            keys_to_remove = [k for k in self._git_checkpoints if k >= msg_index]
+            for k in keys_to_remove:
+                del self._git_checkpoints[k]
+
+            return True
+        except Exception as e:
+            logger.warning(f"Git checkpoint restore failed: {e}")
+            return False
+
+    async def _handle_message_action(self, result: dict[str, Any] | None) -> None:
+        """Process the selected message action from MessageActionsModal."""
+        if not result:
+            return
+
+        action = result["action"]
+        message_text = result["message_text"]
+        message_index = result["message_index"]
+
+        if action == "copy":
+            ok, msg = copy_to_clipboard(message_text)
+            style_name = "success" if ok else "warning"
+            self.show_toast(msg, title="Clipboard", style=style_name)
+
+        elif action == "revert":
+            await self._action_revert(message_text, message_index)
+
+    async def _action_revert(self, message_text: str, message_index: int) -> None:
+        """Revert: remove messages from index onward, truncate memory, restore files, set prompt."""
+        self._interrupt_active_generation()
+
+        # 1. Remove widgets from chat view
+        self.chat_view.remove_messages_from_index(message_index)
+
+        # 2. Truncate conversation memory
+        if self.engine and self.engine.session:
+            keep = await self._count_memory_messages_before(message_index)
+            session_id = self.engine.session.session_id
+            if (
+                self.engine.memory_manager
+                and self.engine.memory_manager.conversation
+            ):
+                await self.engine.memory_manager.conversation.truncate(
+                    session_id, keep
+                )
+
+        # 3. Restore file changes via git checkpoint
+        git_restored = self._restore_git_checkpoint(message_index)
+
+        # 4. Place message text into prompt box
+        self.prompt_box.text = message_text
+        self.prompt_box.input_field.focus()
+
+        # 5. If chat is now empty, show header/hints and clean up empty session
+        if not self.chat_view.has_messages:
+            self.header.show_header()
+            self.prompt_box.show_hints()
+            self.status_bar.clear_context_usage()
+            if self.engine and self.engine.session:
+                self._cleanup_empty_session(self.engine.session.session_id)
+        else:
+            self._update_context_display()
+
+        file_note = " and file changes restored" if git_restored else ""
+        self.show_toast(
+            f"Message reverted{file_note} — edit and resend",
+            title="Reverted",
+            style="info",
+        )
+
     # ─── Modal Actions ───
 
     def _dismiss_active_modals(self) -> None:
@@ -653,27 +904,51 @@ class MainScreen(Screen):
             if selected_provider and isinstance(selected_provider, dict) and "id" in selected_provider:
                 prov_id = selected_provider["id"]
                 prov_name = selected_provider["name"]
-                api_key_env = selected_provider.get("api_key_env") or f"{prov_id.upper()}_API_KEY"
-
-                def on_api_key_done(saved_provider_id: str | None) -> None:
-                    if saved_provider_id:
-                        self.action_open_models(only_provider=saved_provider_id)
-
-                def open_api_key_screen() -> None:
-                    self.app.push_screen(
-                        ApiKeyModal(
-                            provider_id=prov_id,
-                            provider_name=prov_name,
-                            api_key_env=api_key_env,
-                            engine=self.engine,
-                        ),
-                        on_api_key_done,
-                    )
-
-                self.set_timer(0.05, open_api_key_screen)
+                prov_raw = selected_provider.get("raw", {})
+                env_vars = selected_provider.get("env_vars") or get_provider_env_vars(prov_id, prov_raw)
+                self._prompt_provider_env_vars(prov_id, prov_name, env_vars, index=0)
 
         self._dismiss_active_modals()
         self.app.push_screen(ConnectModal(engine=self.engine), on_connect_done)
+
+    def _prompt_provider_env_vars(
+        self,
+        prov_id: str,
+        prov_name: str,
+        env_vars: list[str],
+        index: int = 0,
+    ) -> None:
+        """Sequential multi-step prompt for providers requiring N environment variables."""
+        if not env_vars or index >= len(env_vars):
+            self.action_open_models(only_provider=prov_id)
+            return
+
+        current_env = env_vars[index]
+        label = format_env_var_label(current_env)
+        is_secret = any(
+            k in current_env.upper()
+            for k in ("KEY", "SECRET", "TOKEN", "PASSWORD", "CREDENTIAL", "AUTH")
+        )
+
+        title = f"Enter your {label}"
+        placeholder = label
+
+        def on_step_done(saved_provider_id: str | None) -> None:
+            if saved_provider_id:
+                self._prompt_provider_env_vars(prov_id, prov_name, env_vars, index=index + 1)
+
+        self.app.push_screen(
+            ApiKeyModal(
+                provider_id=prov_id,
+                provider_name=prov_name,
+                api_key_env=current_env,
+                title=title,
+                placeholder=placeholder,
+                password=is_secret,
+                engine=self.engine,
+            ),
+            on_step_done,
+        )
 
     def action_open_models(
         self,
@@ -700,22 +975,15 @@ class MainScreen(Screen):
                 self.engine.config.save()
                 self.update_engine_status()
 
-        def do_push() -> None:
-            self._dismiss_active_modals()
-            self.app.push_screen(
-                ModelModal(
-                    engine=self.engine,
-                    initial_provider=initial_provider,
-                    only_provider=only_provider,
-                ),
-                on_model_selected,
-            )
-
-        from textual.screen import ModalScreen
-        if isinstance(self.app.screen, ModalScreen):
-            self.set_timer(0.05, do_push)
-        else:
-            do_push()
+        self._dismiss_active_modals()
+        self.app.push_screen(
+            ModelModal(
+                engine=self.engine,
+                initial_provider=initial_provider,
+                only_provider=only_provider,
+            ),
+            on_model_selected,
+        )
 
     def action_open_sessions(self) -> None:
         def on_session_selected(session_id: str | None) -> None:

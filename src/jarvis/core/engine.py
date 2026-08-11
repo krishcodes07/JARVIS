@@ -68,6 +68,13 @@ class JarvisEngine:
         self._initialized: bool = False
         self._background_tasks: set[Any] = set()
 
+    @property
+    def last_used_model(self) -> str:
+        """Return the model identifier used for the last generation/stream turn."""
+        if self.provider_manager and self.provider_manager.last_used_model:
+            return self.provider_manager.last_used_model
+        return self.config.provider.model if self.config else "JARVIS"
+
     async def initialize(self, config: JarvisConfig | None = None) -> None:
         """Initialize all subsystems.
 
@@ -177,7 +184,7 @@ class JarvisEngine:
             if not response.tool_calls:
                 final_answer = response.content
                 if self.memory_manager:
-                    await self.memory_manager.add_message(session_id, "assistant", final_answer)
+                    await self.memory_manager.add_message(session_id, "assistant", final_answer, model=self.last_used_model)
                 self._schedule_memory_extraction(session_id, message, final_answer)
                 return final_answer
 
@@ -318,7 +325,7 @@ class JarvisEngine:
                 if not tool_calls:
                     final_text = "".join(content_parts)
                     if self.memory_manager:
-                        await self.memory_manager.add_message(session_id, "assistant", final_text)
+                        await self.memory_manager.add_message(session_id, "assistant", final_text, model=self.last_used_model)
                         saved_assistant_msg = True
                     self._schedule_memory_extraction(session_id, message, final_text)
                     return
@@ -377,7 +384,7 @@ class JarvisEngine:
                 partial_text = "".join(accumulated_assistant_chunks).strip()
                 if partial_text and self.memory_manager:
                     with contextlib.suppress(Exception):
-                        await self.memory_manager.add_message(session_id, "assistant", partial_text)
+                        await self.memory_manager.add_message(session_id, "assistant", partial_text, model=self.last_used_model)
                         saved_assistant_msg = True
             raise err
 

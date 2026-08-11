@@ -17,6 +17,7 @@ from textual.widgets.option_list import Option
 
 from jarvis.providers.models_dev import (
     get_provider_env_var,
+    get_provider_env_vars,
     is_provider_connected,
     load_models_dev_cache,
 )
@@ -109,12 +110,13 @@ class ConnectModal(ModalScreen[dict[str, str] | None]):
         data_list: list[dict[str, Any]] = []
         for pid, pdata in cache.items():
             pname = pdata.get("name") or pid
-            env_var = get_provider_env_var(pid, pdata)
+            env_vars = get_provider_env_vars(pid, pdata)
             connected = is_provider_connected(pid, pdata)
             data_list.append({
                 "id": pid,
                 "name": pname,
-                "api_key_env": env_var,
+                "api_key_env": env_vars[0] if env_vars else f"{pid.upper()}_API_KEY",
+                "env_vars": env_vars,
                 "connected": connected,
                 "raw": pdata,
             })

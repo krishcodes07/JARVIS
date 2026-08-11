@@ -48,6 +48,12 @@ class ProviderManager:
         self.registry = ProviderRegistry()
         self._active_provider: BaseProvider | None = None
         self._active_name: str = ""
+        self._last_used_model: str = ""
+
+    @property
+    def last_used_model(self) -> str:
+        """Return the model identifier used for the last generation/stream turn."""
+        return self._last_used_model
 
     async def initialize(self) -> None:
         """Initialize the provider manager and load the active provider."""
@@ -123,6 +129,8 @@ class ProviderManager:
                 top_p=self.config.provider.top_p,
             )
 
+        self._last_used_model = config.model
+
         try:
             return await self._active_provider.generate(messages, config)
         except Exception as e:
@@ -147,6 +155,8 @@ class ProviderManager:
                 max_tokens=self.config.provider.max_tokens,
                 top_p=self.config.provider.top_p,
             )
+
+        self._last_used_model = config.model
 
         has_yielded = False
         try:
@@ -283,6 +293,7 @@ class ProviderManager:
         try:
             await self.switch_provider(fallback.provider)
             config.model = fallback.model
+            self._last_used_model = fallback.model
             if not self._active_provider:
                 raise ProviderError(f"Fallback provider '{fallback.provider}' could not be initialized.")
             return await self._active_provider.generate(messages, config)
@@ -307,6 +318,7 @@ class ProviderManager:
         try:
             await self.switch_provider(fallback.provider)
             config.model = fallback.model
+            self._last_used_model = fallback.model
             if not self._active_provider:
                 raise ProviderError(f"Fallback provider '{fallback.provider}' could not be initialized.")
             async for chunk in self._active_provider.stream(messages, config):

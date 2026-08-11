@@ -11,23 +11,53 @@ from rich.markdown import Markdown
 from rich.text import Text
 from textual import events, on
 from textual.containers import VerticalScroll
+from textual.message import Message as TextualMessage
 from textual.widgets import Static
 
 from jarvis.ui.tui.utils import format_tool_name, truncate_text
 
 
 class MessageWidget(Static):
-    """A single chat message or event in the feed with improved spacing."""
+    """A single chat message or event in the feed with improved spacing.
+
+    User messages are clickable — clicking one posts an ``ActionRequested``
+    event so the screen can open the Message Actions modal.
+    """
+
+    class ActionRequested(TextualMessage):
+        """Posted when a user message is clicked to open message actions."""
+
+        def __init__(
+            self,
+            widget: MessageWidget,
+            message_text: str,
+            message_index: int,
+        ) -> None:
+            super().__init__()
+            self.widget = widget
+            self.message_text = message_text
+            self.message_index = message_index
+
+    DEFAULT_CSS = """
+    MessageWidget.chat-message-user {
+        /* subtle hover highlight so user knows it's clickable */
+    }
+    MessageWidget.chat-message-user:hover {
+        background: #ffffff 8%;
+    }
+    """
 
     def __init__(
         self,
         content: str,
         role: str = "assistant",
+        message_index: int = -1,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self.role = role
         self.raw_content = content
+        self.message_index: int = message_index
         self._apply_content(content)
 
     def _apply_content(self, content: str) -> None:
@@ -51,6 +81,18 @@ class MessageWidget(Static):
 
     def update_content(self, new_content: str) -> None:
         self._apply_content(new_content)
+
+    def on_click(self, event: events.Click) -> None:
+        """Open message actions modal when a user message is clicked."""
+        if self.role == "user" and self.message_index >= 0:
+            event.stop()
+            self.post_message(
+                self.ActionRequested(
+                    widget=self,
+                    message_text=self.raw_content,
+                    message_index=self.message_index,
+                )
+            )
 
 
 class ToolCallWidget(Static):
@@ -179,6 +221,7 @@ class ChatViewWidget(VerticalScroll):
         self._loading_timer = None
         self._loading_frame: int = 0
         self._is_first_chunk: bool = False
+        self._message_counter: int = 0  # Sequential index for user messages
 
     @property
     def has_messages(self) -> bool:
@@ -192,7 +235,58 @@ class ChatViewWidget(VerticalScroll):
         self._last_tool_widget = None
         self._has_messages = False
         self._is_first_chunk = False
+        self._message_counter = 0
         self.add_class("hidden")
+
+    def remove_messages_from_index(self, from_index: int) -> None:
+        """Remove all widgets starting from the user message with *from_index*.
+
+        This removes the targeted user message, its AI response, tool calls,
+        footers, and ALL subsequent messages (user + assistant) after it.
+        """
+        self._stop_loading_timer()
+        removing = False
+        to_remove: list = []
+
+        for child in list(self.children):
+            if not removing:
+                # Start removing when we hit the user message with the matching index
+                if (
+                    isinstance(child, MessageWidget)
+                    and child.role == "user"
+                    and child.message_index == from_index
+                ):
+                    removing = True
+                    to_remove.append(child)
+            else:
+                to_remove.append(child)
+
+        for widget in to_remove:
+            widget.remove()
+
+        remaining_children = [c for c in self.children if c not in to_remove]
+
+        # Reset streaming state
+        self._current_assistant_widget = None
+        self._last_tool_widget = None
+        self._is_first_chunk = False
+
+        # Recalculate message counter from remaining user messages
+        remaining_user_count = sum(
+            1 for c in remaining_children
+            if isinstance(c, MessageWidget) and c.role == "user"
+        )
+        self._message_counter = remaining_user_count
+
+        # If no messages remain, show empty state
+        if not any(
+            isinstance(c, MessageWidget)
+            for c in remaining_children
+        ):
+            self._has_messages = False
+            self.add_class("hidden")
+        else:
+            self.scroll_end(animate=False)
 
     def _mark_has_messages(self) -> None:
         if not self._has_messages:
@@ -222,7 +316,9 @@ class ChatViewWidget(VerticalScroll):
     def add_user_message(self, text: str) -> None:
         self._stop_loading_timer()
         self._mark_has_messages()
-        msg = MessageWidget(content=text, role="user")
+        idx = self._message_counter
+        self._message_counter += 1
+        msg = MessageWidget(content=text, role="user", message_index=idx)
         self.mount(msg)
         self.scroll_end(animate=False)
         self._current_assistant_widget = None
@@ -347,7 +443,8 @@ class ChatViewWidget(VerticalScroll):
                 if content:
                     m = MessageWidget(content=content, role="assistant")
                     self.mount(m)
-                    footer = AssistantFooterWidget(mode="", model="JARVIS", elapsed="")
+                    saved_model = msg.get("model") or msg.get("model_name") or "JARVIS"
+                    footer = AssistantFooterWidget(mode="", model=saved_model, elapsed="")
                     self.mount(footer)
             elif role in ("tool", "tool_call", "tool_result"):
                 tool_name = msg.get("tool_name") or msg.get("name") or "tool"
