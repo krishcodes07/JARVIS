@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -54,12 +54,26 @@ class GenerationResponse(BaseModel):
     usage: dict[str, Any] = Field(default_factory=dict)
     raw: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("tool_calls", mode="before")
+    @classmethod
+    def _validate_tool_calls(cls, v: Any) -> list[dict[str, Any]]:
+        if not v or not isinstance(v, list):
+            return []
+        return v
+
 
 class StreamChunk(BaseModel):
     """A single chunk from a streaming response."""
     content: str = ""
     tool_calls: list[dict[str, Any]] = Field(default_factory=list)
     finish_reason: str | None = None
+
+    @field_validator("tool_calls", mode="before")
+    @classmethod
+    def _validate_tool_calls(cls, v: Any) -> list[dict[str, Any]]:
+        if not v or not isinstance(v, list):
+            return []
+        return v
 
 
 class BaseProvider(ABC):

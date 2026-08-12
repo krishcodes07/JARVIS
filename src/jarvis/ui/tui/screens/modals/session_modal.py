@@ -122,7 +122,7 @@ class SessionModal(ModalScreen[str | None]):
         highlighted = self.option_list.highlighted
         if highlighted is not None:
             option = self.option_list.get_option_at_index(highlighted)
-            option_id = str(option.id) if option and option.id else None
+            option_id = option.id if option and option.id else None
             if option_id and not option_id.startswith("grp-"):
                 return option_id
         return None
@@ -143,6 +143,8 @@ class SessionModal(ModalScreen[str | None]):
             if conv_path.exists():
                 try:
                     os.remove(conv_path)
+                    from jarvis.core.snapshot import FileSnapshotManager
+                    FileSnapshotManager().clear_session(sid)
                     logger.info(f"Deleted session file: {conv_path}")
                 except Exception as e:
                     logger.warning(f"Could not delete session {sid}: {e}")

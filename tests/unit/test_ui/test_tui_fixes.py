@@ -146,7 +146,7 @@ async def test_cancelled_stream_saves_partial_message():
         async for _ in engine.stream_chat("Hi"):
             pass
 
-    memory_mock.add_message.assert_called_with("test_cancel_session", "assistant", "Hello World")
+    assert memory_mock.add_message.call_args[0] == ("test_cancel_session", "assistant", "Hello World")
 
 
 def test_tab_key_prepends_slash_and_opens_popover():

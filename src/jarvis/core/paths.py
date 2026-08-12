@@ -42,6 +42,13 @@ def get_sessions_dir() -> Path:
     return d
 
 
+def get_snapshots_dir() -> Path:
+    """Get the path to the file snapshots directory (~/.jarvis/workspace/snapshots)."""
+    d = get_jarvis_home() / "workspace" / "snapshots"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def get_long_term_memory_dir() -> Path:
     """Get the path to the long-term memory directory (~/.jarvis/workspace/long_term_memory)."""
     d = get_jarvis_home() / "workspace" / "long_term_memory"

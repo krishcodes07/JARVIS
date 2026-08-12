@@ -20,6 +20,7 @@ from textual.widgets import Button, Input, TextArea
 from textual.worker import get_current_worker
 
 from jarvis.core.paths import get_sessions_dir
+from jarvis.core.snapshot import FileSnapshotManager
 from jarvis.providers.models_dev import (
     format_env_var_label,
     get_model_context_limit,
@@ -78,6 +79,7 @@ class MainScreen(Screen):
         super().__init__(**kwargs)
         self.engine = engine
         self.voice_controller = VoiceSessionController(engine=self.engine)
+        self.snapshot_manager = FileSnapshotManager()
         self.header = HeaderWidget(id="header-container")
         self.chat_view = ChatViewWidget(id="chat-scroll")
         self.popover = CommandPopoverWidget(id="command-popover")
@@ -89,6 +91,12 @@ class MainScreen(Screen):
         self._prompt_history: list[str] = []
         self._history_index: int = -1
         self._git_checkpoints: dict[int, dict[str, Any]] = {}
+
+    @property
+    def _current_session_id(self) -> str:
+        if self.engine and self.engine.session and self.engine.session.session_id:
+            return self.engine.session.session_id
+        return "default"
 
     def compose(self):
         yield self.header
@@ -351,10 +359,10 @@ class MainScreen(Screen):
         async def on_tool_call(tool_name: str, tool_args: dict):
             args_str = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
             self.chat_view.add_tool_call(tool_name, args_str)
+            self.snapshot_manager.backup_tool_call(self._current_session_id, msg_idx, tool_name, tool_args)
 
         def on_tool_result(tool_name: str, result: str):
-            res_str = result[:150] + "..." if len(result) > 150 else result
-            self.chat_view.add_tool_output(res_str)
+            self.chat_view.add_tool_output(result)
 
         async def approval_callback(tool_name: str, tool_args: dict) -> bool:
             args_str = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
@@ -449,15 +457,17 @@ class MainScreen(Screen):
                 # 3. Stream LLM response
                 model_name = self.engine.config.provider.model if (self.engine and self.engine.config) else "JARVIS"
                 self.chat_view.start_assistant_stream()
+                msg_idx = self.chat_view._message_counter - 1
+                self._save_git_checkpoint(msg_idx)
                 accumulated_response: list[str] = []
 
                 async def on_tool_call(tool_name: str, tool_args: dict):
                     args_str = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
                     self.chat_view.add_tool_call(tool_name, args_str)
+                    self.snapshot_manager.backup_tool_call(self._current_session_id, msg_idx, tool_name, tool_args)
 
                 def on_tool_result(tool_name: str, result: str):
-                    res_str = result[:150] + "..." if len(result) > 150 else result
-                    self.chat_view.add_tool_output(res_str)
+                    self.chat_view.add_tool_output(result)
 
                 async for chunk in self.engine.stream_chat(  # type: ignore[union-attr]
                     user_query,
@@ -505,7 +515,6 @@ class MainScreen(Screen):
             "/mcp": self.action_open_mcps,
             "/config": self.action_open_config,
             "/debug": self.action_open_debug,
-            "/voice": self.action_toggle_voice,
             "/theme": self.action_open_theme,
         }
 
@@ -524,9 +533,6 @@ class MainScreen(Screen):
                     self.action_open_theme()
             else:
                 modal_handlers[cmd]()
-            if cmd == "/voice":
-                status = "enabled (listening)" if self.voice_controller.is_active else "disabled"
-                self.chat_view.add_user_message(f"✓ Hands-free voice mode toggled: {status}")
             return
 
         if cmd == "/new":
@@ -560,6 +566,7 @@ class MainScreen(Screen):
                     await self.engine.session.end()
                 if self.engine.memory_manager and self.engine.memory_manager.conversation:
                     await self.engine.memory_manager.conversation.delete(old_session_id)
+                self.snapshot_manager.clear_session(old_session_id)
                 from jarvis.core.session import Session
                 self.engine.session = Session(engine=self.engine)
 
@@ -583,21 +590,6 @@ class MainScreen(Screen):
             style_name = "success" if ok else ("warning" if last_text else "info")
             self.show_toast(msg, title="Clipboard", style=style_name)
 
-        elif cmd == "/provider":
-            if args and self.engine and self.engine.provider_manager:
-                provider_name = args[0].lower()
-                try:
-                    await self.engine.provider_manager.switch_provider(provider_name)
-                    if self.engine.config:
-                        self.engine.config.provider.active = provider_name
-                        self.engine.config.save()
-                    self.update_engine_status()
-                    self.chat_view.add_user_message(f"✓ Switched provider to: {provider_name}")
-                except Exception as e:
-                    self.chat_view.add_error_message(f"Failed to switch provider: {e}")
-            else:
-                self.action_open_models()
-
         elif cmd == "/connect":
             self.action_open_connect()
 
@@ -611,15 +603,6 @@ class MainScreen(Screen):
                     self.chat_view.add_user_message(f"✓ Switched active model to: {model_name}")
             else:
                 self.action_open_models()
-
-        elif cmd in ("/stt", "/tts", "/voices"):
-            info = self.voice_controller.get_status_info()
-            self.chat_view.add_user_message(
-                f"**Voice Subsystem Info**\n"
-                f"- **STT Provider**: {info['stt_provider']}\n"
-                f"- **TTS Provider**: {info['tts_provider']}\n"
-                f"- **Status**: {'Ready' if info['initialized'] else 'Disabled'}"
-            )
 
         else:
             self.chat_view.add_error_message(f"Unknown command '{cmd}'. Type /help for available commands.")
@@ -728,16 +711,18 @@ class MainScreen(Screen):
                     data = json.load(f)
                 if not data:  # empty list
                     filepath.unlink()
+                    self.snapshot_manager.clear_session(session_id)
                     logger.info(f"Cleaned up empty session file: {session_id}")
         except Exception:
             pass
 
     def _save_git_checkpoint(self, msg_index: int) -> None:
-        """Save git working tree state before processing a user message.
+        """Save git working tree state and file snapshot before processing a user message.
 
-        Captures a lightweight stash-like ref plus the list of untracked files
+        Captures a lightweight stash-like ref plus explicit file snapshots
         so that revert can restore the workspace to this point.
         """
+        self.snapshot_manager.start_checkpoint(self._current_session_id, msg_index)
         try:
             cwd = str(Path.cwd())
             # Check if we're in a git repo
@@ -867,8 +852,10 @@ class MainScreen(Screen):
                     session_id, keep
                 )
 
-        # 3. Restore file changes via git checkpoint
+        # 3. Restore file changes via snapshot manager and git checkpoint
+        snapshot_restored = self.snapshot_manager.restore_checkpoint(self._current_session_id, message_index)
         git_restored = self._restore_git_checkpoint(message_index)
+        files_restored = snapshot_restored or git_restored
 
         # 4. Place message text into prompt box
         self.prompt_box.text = message_text
@@ -884,7 +871,7 @@ class MainScreen(Screen):
         else:
             self._update_context_display()
 
-        file_note = " and file changes restored" if git_restored else ""
+        file_note = " and file changes restored" if files_restored else ""
         self.show_toast(
             f"Message reverted{file_note} — edit and resend",
             title="Reverted",

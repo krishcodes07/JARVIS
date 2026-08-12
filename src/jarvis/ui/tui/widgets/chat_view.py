@@ -155,9 +155,8 @@ class ToolCallWidget(Static):
 
     def set_output(self, output_text: str) -> None:
         self.result_text = output_text
-        res = truncate_text(output_text, max_length=1000, ellipsis="\n... (truncated)")
         t = Text()
-        t.append(f"↳ {res}", style="italic #737373")
+        t.append(f"↳ {output_text}", style="italic #737373")
         self.output_widget.update(t)
 
     def on_click(self, event: events.Click) -> None:
@@ -313,6 +312,18 @@ class ChatViewWidget(VerticalScroll):
     def on_unmount(self) -> None:
         self._stop_loading_timer()
 
+    def _is_at_bottom(self, threshold: float = 4.0) -> bool:
+        """Return True if the user is currently scrolled at or near the bottom."""
+        try:
+            return (self.max_scroll_y - self.scroll_y) <= threshold
+        except Exception:
+            return True
+
+    def _scroll_to_bottom_if_auto(self) -> None:
+        """Auto-scroll to the bottom only if the user is currently at the bottom."""
+        if self._is_at_bottom():
+            self.scroll_end(animate=False)
+
     def add_user_message(self, text: str) -> None:
         self._stop_loading_timer()
         self._mark_has_messages()
@@ -339,7 +350,7 @@ class ChatViewWidget(VerticalScroll):
         tool_w = ToolCallWidget(tool_name=tool_name, args_str=args_str)
         self.mount(tool_w)
         self._last_tool_widget = tool_w
-        self.scroll_end(animate=False)
+        self._scroll_to_bottom_if_auto()
         return tool_w
 
     def add_tool_output(self, output_text: str = "no output") -> None:
@@ -358,7 +369,7 @@ class ChatViewWidget(VerticalScroll):
             self.mount(tool_w)
             self._last_tool_widget = tool_w
 
-        self.scroll_end(animate=False)
+        self._scroll_to_bottom_if_auto()
 
     def add_error_message(self, text: str) -> None:
         self._stop_loading_timer()
@@ -369,7 +380,7 @@ class ChatViewWidget(VerticalScroll):
             self._is_first_chunk = False
         msg = MessageWidget(content=text, role="error")
         self.mount(msg)
-        self.scroll_end(animate=False)
+        self._scroll_to_bottom_if_auto()
 
     def start_assistant_stream(self) -> MessageWidget | None:
         self._mark_has_messages()
@@ -407,7 +418,7 @@ class ChatViewWidget(VerticalScroll):
 
         new_content = self._current_assistant_widget.raw_content + chunk
         self._current_assistant_widget.update_content(new_content)
-        self.scroll_end(animate=False)
+        self._scroll_to_bottom_if_auto()
 
     def update_assistant_stream(self, text: str) -> None:
         self.append_assistant_chunk(text)
@@ -427,7 +438,7 @@ class ChatViewWidget(VerticalScroll):
         self.mount(footer)
         self._current_assistant_widget = None
         self._start_time = 0.0
-        self.scroll_end(animate=False)
+        self._scroll_to_bottom_if_auto()
 
     def load_session_history(self, messages: list[dict]) -> None:
         self.clear_messages()

@@ -204,7 +204,7 @@ class OpenAIProvider(BaseProvider):
         return GenerationResponse(
             content=message.get("content", "") or "",
             role=message.get("role", "assistant"),
-            tool_calls=message.get("tool_calls", []),
+            tool_calls=message.get("tool_calls") or [],
             finish_reason=choice.get("finish_reason"),
             usage=data.get("usage", {}),
             raw=data,
@@ -219,6 +219,6 @@ class OpenAIProvider(BaseProvider):
         delta = choices[0].get("delta", {})
         return StreamChunk(
             content=delta.get("content", "") or "",
-            tool_calls=delta.get("tool_calls", []),
+            tool_calls=delta.get("tool_calls") or [],
             finish_reason=choices[0].get("finish_reason"),
         )

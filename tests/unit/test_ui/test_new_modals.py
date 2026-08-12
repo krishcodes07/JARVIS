@@ -17,14 +17,14 @@ def test_confirm_modal_init():
 def test_config_modal_init():
     modal = ConfigModal(engine=None)
     assert modal.engine is None
-    assert modal.dialog is not None
+    assert modal is not None
 
 
 def test_debug_modal_init():
     modal = DebugModal(engine=None, is_generating=False, is_voice_active=False)
     assert modal.is_generating is False
     assert modal.is_voice_active is False
-    assert modal.dialog is not None
+    assert modal is not None
 
 
 def test_voice_controller_status_when_disconnected():

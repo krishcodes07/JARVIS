@@ -293,7 +293,11 @@ class ProviderManager:
         try:
             await self.switch_provider(fallback.provider)
             config.model = fallback.model
-            self._last_used_model = fallback.model
+            self._last_used_model = (
+                fallback.model
+                if "(fallback)" in fallback.model
+                else f"{fallback.model} (fallback)"
+            )
             if not self._active_provider:
                 raise ProviderError(f"Fallback provider '{fallback.provider}' could not be initialized.")
             return await self._active_provider.generate(messages, config)
@@ -318,7 +322,11 @@ class ProviderManager:
         try:
             await self.switch_provider(fallback.provider)
             config.model = fallback.model
-            self._last_used_model = fallback.model
+            self._last_used_model = (
+                fallback.model
+                if "(fallback)" in fallback.model
+                else f"{fallback.model} (fallback)"
+            )
             if not self._active_provider:
                 raise ProviderError(f"Fallback provider '{fallback.provider}' could not be initialized.")
             async for chunk in self._active_provider.stream(messages, config):

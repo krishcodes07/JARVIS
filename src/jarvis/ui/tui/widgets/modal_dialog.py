@@ -95,7 +95,7 @@ class ModalDialog(Vertical):
 
     ModalDialog .modal-list-container {
         height: 1fr;
-        margin-top: 1;
+        margin-top: 0;
         background: transparent;
     }
 
@@ -163,12 +163,17 @@ class ModalDialog(Vertical):
 
         self.styles.max_height = "80%"
         self.styles.max_width = "90%"
-        self.styles.min_height = 8
 
         if isinstance(self._dialog_width, (int, str)):
             self.styles.width = self._dialog_width
         if isinstance(self._dialog_height, (int, str)):
             self.styles.height = self._dialog_height
+            if isinstance(self._dialog_height, int):
+                self.styles.min_height = min(8, self._dialog_height)
+            else:
+                self.styles.min_height = 8
+        else:
+            self.styles.min_height = 8
         if self._border_style != "none":
             parts = self._border_style.split(" ", 1)
             if len(parts) == 2:
