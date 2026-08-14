@@ -140,8 +140,16 @@ class ConversationStore(BaseMemory):
         """Load a session from disk."""
         filepath = self._storage_dir / f"{session_id}.json"
         if filepath.exists():
-            with open(filepath, encoding="utf-8") as f:
-                return cast(list[dict[str, Any]], json.load(f))
+            try:
+                content = filepath.read_text(encoding="utf-8").strip()
+                if content:
+                    data = json.loads(content)
+                    if isinstance(data, list):
+                        return data
+                filepath.write_text("[]", encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"Failed to load session {session_id}: {e}. Resetting to empty list.")
+                filepath.write_text("[]", encoding="utf-8")
         return []
 
     async def _save_session(self, session_id: str) -> None:

@@ -7,10 +7,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
-from jarvis.core.exceptions import ToolExecutionError, ToolTimeoutError
+from jarvis.core.exceptions import ToolExecutionError, ToolNotFoundError, ToolTimeoutError
 
 if TYPE_CHECKING:
     from jarvis.core.config import JarvisConfig
@@ -22,13 +23,14 @@ ApprovalCallback = Callable[[str, dict[str, Any]], Awaitable[bool]]
 
 
 class ToolExecutor:
-    """Executes tools safely with timeout and error handling.
+    """Executes tools safely with timeout, error handling, and permission checks.
 
     Features:
     - Execution timeout protection
-    - Automatic retry on failure
+    - Automatic retry on transient failures
     - Approval gate for dangerous tools (fail closed)
-    - Result formatting for LLM consumption
+    - Schema validation & parameter mismatch diagnostic suggestions
+    - Structured error formatting for LLM self-correction
     """
 
     def __init__(self, config: JarvisConfig, registry: ToolRegistry) -> None:
@@ -49,9 +51,7 @@ class ToolExecutor:
             tool_name: The tool name.
             arguments: Tool arguments (dict or JSON string).
             approval_callback: Async callback invoked for dangerous tools.
-                Return True to approve, False to deny. When None (and
-                ``auto_approve`` is disabled), dangerous tools are denied
-                by default (fail closed).
+                Return True to approve, False to deny.
 
         Returns:
             Tool execution result as a string.
@@ -60,7 +60,10 @@ class ToolExecutor:
             ToolExecutionError: If execution fails after retries.
             ToolTimeoutError: If execution exceeds timeout.
         """
-        tool = self.registry.get(tool_name)
+        try:
+            tool = self.registry.get(tool_name)
+        except ToolNotFoundError as e:
+            return f"Error: {e}"
 
         # Parse arguments if string
         if isinstance(arguments, str):
@@ -69,6 +72,9 @@ class ToolExecutor:
             except json.JSONDecodeError:
                 arguments = {"input": arguments}
 
+        if not isinstance(arguments, dict):
+            arguments = {}
+
         # Approval gate for dangerous tools
         if tool.schema.dangerous and not self.config.tools.auto_approve:
             approved = False
@@ -76,15 +82,15 @@ class ToolExecutor:
                 try:
                     approved = await approval_callback(tool_name, arguments)
                 except Exception as e:
-                    logger.warning(f"Approval callback failed for '{tool_name}': {e}")
+                    logger.warning("Approval callback failed for '%s': %s", tool_name, e)
             else:
                 logger.warning(
-                    f"Tool '{tool_name}' is dangerous and no approval callback was "
-                    "provided. Denying by default."
+                    "Tool '%s' is dangerous and no approval callback was provided. Denying by default.",
+                    tool_name,
                 )
 
             if not approved:
-                logger.warning(f"Tool '{tool_name}' blocked: approval denied.")
+                logger.warning("Tool '%s' blocked: approval denied.", tool_name)
                 return (
                     f"Tool '{tool_name}' was blocked because its execution was not "
                     "approved. Tell the user what you intended to do and ask whether "
@@ -95,22 +101,54 @@ class ToolExecutor:
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
+                t0 = time.perf_counter()
                 result = await asyncio.wait_for(
                     tool.execute(**arguments),
                     timeout=self.timeout,
                 )
-                logger.info(f"Tool '{tool_name}' executed successfully (attempt {attempt})")
+                duration_ms = int((time.perf_counter() - t0) * 1000)
+                logger.info(
+                    "Tool '%s' executed successfully in %dms (attempt %d)",
+                    tool_name,
+                    duration_ms,
+                    attempt,
+                )
                 return result
+
             except TimeoutError:
                 raise ToolTimeoutError(
                     f"Tool '{tool_name}' timed out after {self.timeout}s"
                 ) from None
+
             except PermissionError as e:
-                raise ToolExecutionError(str(e)) from None
+                return f"Permission Denied executing '{tool_name}': {e}"
+
+            except TypeError as e:
+                # Parameter mismatch error — diagnose and return actionable hint
+                expected_params = [p.name for p in tool.schema.parameters]
+                passed_params = list(arguments.keys())
+                logger.warning(
+                    "Parameter error for tool '%s': %s (Passed: %s, Expected: %s)",
+                    tool_name,
+                    e,
+                    passed_params,
+                    expected_params,
+                )
+                return (
+                    f"Tool Calling Error for '{tool_name}': {e}\n"
+                    f"Parameters passed: {passed_params}\n"
+                    f"Expected parameters: {expected_params}\n"
+                    f"Tool Description: {tool.schema.description}"
+                )
+
             except Exception as e:
                 last_error = e
                 logger.warning(
-                    f"Tool '{tool_name}' failed (attempt {attempt}/{self.max_retries}): {e}"
+                    "Tool '%s' failed (attempt %d/%d): %s",
+                    tool_name,
+                    attempt,
+                    self.max_retries,
+                    e,
                 )
 
         raise ToolExecutionError(

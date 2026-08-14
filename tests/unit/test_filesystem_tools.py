@@ -20,9 +20,20 @@ async def test_filesystem_tools_discovery():
     registry = ToolRegistry(config)
     registry.discover_tools()
 
-    fs_tools = ["read_file", "write_file", "append_file", "edit_file", "list_directory",
-                "make_directory", "delete_file", "copy_file", "move_file", "get_file_info",
-                "search_files", "grep_search"]
+    fs_tools = [
+        "read_file",
+        "write_file",
+        "append_file",
+        "edit_file",
+        "list_directory",
+        "make_directory",
+        "delete_file",
+        "copy_file",
+        "move_file",
+        "get_file_info",
+        "search_files",
+        "grep_search",
+    ]
 
     for name in fs_tools:
         assert name in registry, f"Tool '{name}' not found in registry"
@@ -37,20 +48,29 @@ async def test_filesystem_tools_execution(tmp_path):
 
     # 1. Write file
     writer = WriteFileTool()
-    write_res = await writer.execute(path=test_path, content="Line 1: Hello JARVIS\nLine 2: Python Testing\nLine 3: End")
-    assert "Wrote" in write_res
+    write_res = await writer.execute(
+        path=test_path,
+        content="Line 1: Hello JARVIS\nLine 2: Python Testing\nLine 3: End",
+    )
+    assert "Success" in write_res or "Lines" in write_res
     assert test_file.exists()
 
-    # 2. Read file
+    # 2. Read file (with line numbers)
     reader = ReadFileTool()
     read_res = await reader.execute(path=test_path, start_line=1, end_line=2)
     assert "Hello JARVIS" in read_res
     assert "Python Testing" in read_res
+    assert "1:" in read_res
 
-    # 3. Edit file
+    # 3. Edit file (exact match and unified diff)
     editor = EditFileTool()
-    edit_res = await editor.execute(path=test_path, find_text="Python Testing", replace_text="Advanced Tools")
-    assert "Replaced 1 occurrence(s)" in edit_res
+    edit_res = await editor.execute(
+        path=test_path,
+        target_content="Python Testing",
+        replacement_content="Advanced Tools",
+    )
+    assert "Successfully updated" in edit_res or "Replaced" in edit_res
+    assert "diff" in edit_res
 
     # 4. List directory
     lister = ListDirectoryTool()
@@ -87,4 +107,8 @@ async def test_filesystem_tools_sandbox_enforcement(tmp_path):
 
     # Path outside sandbox
     with pytest.raises(PermissionError):
-        reader.resolve_path("/etc/passwd" if "/" in str(tmp_path) else "C:\\Windows\\System32\\drivers\\etc\\hosts")
+        reader.resolve_path(
+            "/etc/passwd"
+            if "/" in str(tmp_path)
+            else "C:\\Windows\\System32\\drivers\\etc\\hosts"
+        )

@@ -202,6 +202,8 @@ class ToolsConfig(BaseModel):
             "append_file",
             "make_directory",
             "delete_file",
+            "web_search",
+            "read_url",
             "list_skills",
             "get_skill",
         ]
@@ -279,7 +281,7 @@ class VoiceConfig(BaseModel):
             clean = v.strip().lower()
             if clean in ("true", "1", "yes", "on"):
                 return True
-            if clean in ("false", "0", "no", "off", "flase"):
+            if clean in ("false", "0", "no", "off", "false"):
                 return False
         return True
 

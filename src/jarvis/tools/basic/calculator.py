@@ -71,7 +71,8 @@ class _MathEvaluator:
 
     def evaluate(self) -> float:
         """Evaluate the parsed expression."""
-        return self._eval(self._tree.body)
+        val = self._eval(self._tree.body)
+        return float(val)
 
     def _eval(self, node: ast.AST) -> Any:
         if isinstance(node, ast.Constant):

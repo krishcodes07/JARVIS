@@ -5,21 +5,12 @@ Copy File Tool — Copy files or directories to a destination path.
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 from typing import Any
 
 from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
 
 logger = logging.getLogger(__name__)
-
-
-def safe_path(path: str) -> str:
-    """Resolve file path to an absolute path."""
-    expanded = os.path.expanduser(path)
-    if os.path.isabs(expanded):
-        return os.path.realpath(expanded)
-    return os.path.realpath(os.path.join(os.getcwd(), expanded))
 
 
 class CopyFileTool(BaseTool):
@@ -29,8 +20,8 @@ class CopyFileTool(BaseTool):
         name="copy_file",
         description="Copy a file or directory tree to a specified destination path.",
         category="filesystem",
-        aliases=["cp", "copy"],
-        keywords=["copy", "cp", "duplicate", "file", "folder"],
+        aliases=["cp", "copy", "duplicate"],
+        keywords=["copy", "cp", "duplicate", "file", "folder", "clone"],
         dangerous=True,
         parameters=[
             ToolParameter(
@@ -49,8 +40,9 @@ class CopyFileTool(BaseTool):
     )
 
     async def execute(self, **kwargs: Any) -> str:
-        src = kwargs.get("source", "")
-        dst = kwargs.get("destination", "")
+        """Execute copy operation."""
+        src = kwargs.get("source", "").strip()
+        dst = kwargs.get("destination", "").strip()
 
         if not src or not dst:
             return "Error: Both 'source' and 'destination' paths are required."
@@ -60,7 +52,7 @@ class CopyFileTool(BaseTool):
             dst_path = self.resolve_path(dst)
 
             if not src_path.exists():
-                return f"Error: Source path not found: {src}"
+                return f"Error: Source path not found: '{src}'"
 
             dst_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -69,7 +61,10 @@ class CopyFileTool(BaseTool):
                 return f"Successfully copied directory '{src}' to '{dst}'."
             else:
                 shutil.copy2(src_path, dst_path)
-                return f"Successfully copied file '{src}' to '{dst}'."
+                return f"Successfully copied file '{src}' to '{dst}' ({src_path.stat().st_size:,} bytes)."
 
+        except PermissionError as e:
+            return f"Permission Denied: {e}"
         except Exception as e:
+            logger.error("Error copying '%s' to '%s': %s", src, dst, e, exc_info=True)
             return f"Error copying '{src}' to '{dst}': {e}"

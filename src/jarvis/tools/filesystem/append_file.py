@@ -1,11 +1,10 @@
 """
-Append File Tool — Append text content to an existing or new file.
+Append File Tool — Append text content to a file with newline handling and status verification.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
 from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
@@ -13,29 +12,21 @@ from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
 logger = logging.getLogger(__name__)
 
 
-def safe_path(path: str) -> str:
-    """Resolve file path to an absolute path."""
-    expanded = os.path.expanduser(path)
-    if os.path.isabs(expanded):
-        return os.path.realpath(expanded)
-    return os.path.realpath(os.path.join(os.getcwd(), expanded))
-
-
 class AppendFileTool(BaseTool):
-    """Append text content to a file."""
+    """Append text content to the end of a file."""
 
     schema = ToolSchema(
         name="append_file",
-        description="Append text content to the end of a file.",
+        description="Append text content to the end of an existing or new file.",
         category="filesystem",
         aliases=["append_text", "add_to_file"],
-        keywords=["append", "add", "file", "text", "log"],
+        keywords=["append", "add", "file", "text", "log", "write"],
         dangerous=True,
         parameters=[
             ToolParameter(
                 name="path",
                 type="string",
-                description="File path (relative or absolute).",
+                description="File path (relative to workspace or absolute).",
                 required=True,
             ),
             ToolParameter(
@@ -43,6 +34,13 @@ class AppendFileTool(BaseTool):
                 type="string",
                 description="Text content to append to the file.",
                 required=True,
+            ),
+            ToolParameter(
+                name="ensure_newline",
+                type="boolean",
+                description="Whether to ensure content starts on a new line if file doesn't end with one (default: true).",
+                required=False,
+                default=True,
             ),
             ToolParameter(
                 name="encoding",
@@ -55,8 +53,10 @@ class AppendFileTool(BaseTool):
     )
 
     async def execute(self, **kwargs: Any) -> str:
-        path = kwargs.get("path", "")
+        """Execute file append."""
+        path = kwargs.get("path", "").strip()
         content = kwargs.get("content", "")
+        ensure_newline = kwargs.get("ensure_newline", True)
         encoding = kwargs.get("encoding") or "utf-8"
 
         if not path:
@@ -66,10 +66,32 @@ class AppendFileTool(BaseTool):
             filepath = self.resolve_path(path)
             filepath.parent.mkdir(parents=True, exist_ok=True)
 
+            prefix = ""
+            if ensure_newline and filepath.exists() and filepath.stat().st_size > 0:
+                try:
+                    with open(filepath, "rb") as f:
+                        f.seek(-1, 2)
+                        last_byte = f.read(1)
+                        if last_byte != b"\n":
+                            prefix = "\n"
+                except Exception:
+                    pass
+
+            text_to_append = prefix + content
+
             with open(filepath, "a", encoding=encoding) as f:
-                f.write(content)
+                f.write(text_to_append)
 
-            return f"Appended {len(content):,} characters to '{path}'."
+            new_size = filepath.stat().st_size
+            lines_added = len(text_to_append.splitlines())
 
+            return (
+                f"Success: Appended {len(content):,} characters ({lines_added} lines) to '{path}'.\n"
+                f"  • Total File Size Now: {new_size:,} bytes."
+            )
+
+        except PermissionError as e:
+            return f"Permission Denied: {e}"
         except Exception as e:
+            logger.error("Error appending to file '%s': %s", path, e, exc_info=True)
             return f"Error appending to file '{path}': {e}"

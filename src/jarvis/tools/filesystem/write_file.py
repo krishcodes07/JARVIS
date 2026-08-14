@@ -1,47 +1,41 @@
 """
-Write File Tool — Write content to a text file.
+Write File Tool — Atomic file writer with directory creation and detailed status reporting.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any
 
-from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
+from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema, atomic_write_text
 
 logger = logging.getLogger(__name__)
 
 
-def safe_path(path: str) -> str:
-    """Resolve file path to an absolute path."""
-    expanded = os.path.expanduser(path)
-    if os.path.isabs(expanded):
-        return os.path.realpath(expanded)
-    return os.path.realpath(os.path.join(os.getcwd(), expanded))
-
-
 class WriteFileTool(BaseTool):
-    """Write text content to a file, creating parent directories as needed."""
+    """Write text content to a file atomically, creating parent directories as needed."""
 
     schema = ToolSchema(
         name="write_file",
-        description="Write text content to a file. Overwrites existing contents or creates a new file.",
+        description=(
+            "Write text content to a file atomically. "
+            "Creates any missing parent directories automatically and overwrites existing contents safely."
+        ),
         category="filesystem",
         aliases=["write_text", "create_file", "save_file"],
-        keywords=["write", "file", "create", "save", "overwrite"],
+        keywords=["write", "file", "create", "save", "overwrite", "save_file"],
         dangerous=True,
         parameters=[
             ToolParameter(
                 name="path",
                 type="string",
-                description="File path (relative or absolute).",
+                description="File path (relative to workspace or absolute).",
                 required=True,
             ),
             ToolParameter(
                 name="content",
                 type="string",
-                description="The text content to write into the file.",
+                description="The full text content to write into the file.",
                 required=True,
             ),
             ToolParameter(
@@ -55,7 +49,8 @@ class WriteFileTool(BaseTool):
     )
 
     async def execute(self, **kwargs: Any) -> str:
-        path = kwargs.get("path", "")
+        """Write content to file atomically."""
+        path = kwargs.get("path", "").strip()
         content = kwargs.get("content", "")
         encoding = kwargs.get("encoding") or "utf-8"
 
@@ -64,12 +59,26 @@ class WriteFileTool(BaseTool):
 
         try:
             filepath = self.resolve_path(path)
-            filepath.parent.mkdir(parents=True, exist_ok=True)
+            existed_before = filepath.exists()
+            old_size = filepath.stat().st_size if existed_before else 0
 
-            with open(filepath, "w", encoding=encoding) as f:
-                f.write(content)
+            # Atomic write to prevent partial file corruption
+            atomic_write_text(filepath, content, encoding=encoding)
 
-            return f"Wrote {len(content):,} characters to '{path}'."
+            new_size = filepath.stat().st_size
+            line_count = len(content.splitlines())
+            action_verb = "Overwrote" if existed_before else "Created and wrote"
 
+            return (
+                f"Success: {action_verb} '{path}'.\n"
+                f"  • Lines: {line_count:,}\n"
+                f"  • Characters: {len(content):,}\n"
+                f"  • Size: {new_size:,} bytes (previous: {old_size:,} bytes)\n"
+                f"  • Status: Atomic write verified."
+            )
+
+        except PermissionError as e:
+            return f"Permission Denied: {e}"
         except Exception as e:
+            logger.error("Error writing file '%s': %s", path, e, exc_info=True)
             return f"Error writing file '{path}': {e}"

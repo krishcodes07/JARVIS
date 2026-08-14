@@ -6,7 +6,7 @@ Reads recent messages from any personal chat, channel, or group.
 from ..client import get_telegram_client, run_async
 
 NAME = "read_messages"
-DESCRIPTION = "Read recent messages from any personal Telegram chat, user (@username), or channel."
+DESCRIPTION = "Read recent messages from any personal Telegram chat (chat_id), user (@username), or channel."
 
 
 async def _read_user_messages(chat: str, limit: int = 10) -> str:
@@ -26,14 +26,18 @@ async def _read_user_messages(chat: str, limit: int = 10) -> str:
         if not messages:
             return f"Telegram: No messages found in '{chat}'."
 
-        output = [f"📩 Recent {len(messages)} Message(s) from '{chat}':\n"]
-        for m in reversed(messages):
+        msg_list = messages if isinstance(messages, list) else [messages]
+
+        output = [f"📩 Recent {len(msg_list)} Message(s) from '{chat}':\n"]
+        for m in reversed(msg_list):
             sender = await m.get_sender() if hasattr(m, "get_sender") else None
             sender_name = getattr(sender, "first_name", getattr(sender, "username", "Unknown")) if sender else "System"
-            text = m.text or "[Non-text message / Media]"
+            text = getattr(m, "text", None) or getattr(m, "message", None) or "[Non-text message / Media]"
 
-            date_str = m.date.strftime("%Y-%m-%d %H:%M:%S") if m.date else ""
-            output.append(f"  • [{date_str}] {sender_name} (ID: {m.id}): {text}")
+            msg_date = getattr(m, "date", None)
+            date_str = msg_date.strftime("%Y-%m-%d %H:%M:%S") if msg_date else ""
+            msg_id = getattr(m, "id", "N/A")
+            output.append(f"  • [{date_str}] {sender_name} (ID: {msg_id}): {text}")
 
         return "\n".join(output)
 

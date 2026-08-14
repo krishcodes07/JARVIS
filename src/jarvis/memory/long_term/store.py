@@ -43,9 +43,31 @@ class LongTermStore(BaseMemory):
         """Load existing memories from disk."""
         self._storage_path.parent.mkdir(parents=True, exist_ok=True)
         if self._storage_path.exists():
-            with open(self._storage_path, encoding="utf-8") as f:
-                self._memories = json.load(f)
+            try:
+                content = self._storage_path.read_text(encoding="utf-8").strip()
+                if content:
+                    data = json.loads(content)
+                    if isinstance(data, dict):
+                        self._memories = data
+                    elif isinstance(data, list):
+                        self._memories = {
+                            f"mem_{i}": v if isinstance(v, dict) else {"content": str(v)}
+                            for i, v in enumerate(data)
+                        }
+                    else:
+                        self._memories = {}
+                else:
+                    self._memories = {}
+                    self._storage_path.write_text("{}", encoding="utf-8")
+            except Exception as e:
+                logger.warning(
+                    f"Failed to read memories from {self._storage_path}: {e}. Initializing empty."
+                )
+                self._memories = {}
+                self._storage_path.write_text("{}", encoding="utf-8")
             logger.info(f"Loaded {len(self._memories)} long-term memories.")
+        else:
+            self._storage_path.write_text("{}", encoding="utf-8")
 
     async def store(self, key: str, data: Any) -> None:
         """Store or update a memory.

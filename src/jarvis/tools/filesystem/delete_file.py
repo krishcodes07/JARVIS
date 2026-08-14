@@ -1,11 +1,10 @@
 """
-Delete File Tool — Delete a file or directory.
+Delete File Tool — Delete a file or directory with safety checks.
 """
 
 from __future__ import annotations
 
 import logging
-import os
 import shutil
 from typing import Any
 
@@ -14,35 +13,27 @@ from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
 logger = logging.getLogger(__name__)
 
 
-def safe_path(path: str) -> str:
-    """Resolve file path to an absolute path."""
-    expanded = os.path.expanduser(path)
-    if os.path.isabs(expanded):
-        return os.path.realpath(expanded)
-    return os.path.realpath(os.path.join(os.getcwd(), expanded))
-
-
 class DeleteFileTool(BaseTool):
-    """Delete a file or recursively remove a directory."""
+    """Delete a file or recursively remove a directory folder."""
 
     schema = ToolSchema(
         name="delete_file",
         description="Delete a file or recursively remove a directory folder.",
         category="filesystem",
         aliases=["rm", "unlink", "remove_file", "delete_folder"],
-        keywords=["delete", "remove", "unlink", "rm", "file", "folder"],
+        keywords=["delete", "remove", "unlink", "rm", "file", "folder", "trash"],
         dangerous=True,
         parameters=[
             ToolParameter(
                 name="path",
                 type="string",
-                description="Path of file or directory to delete.",
+                description="Path of the file or directory to delete.",
                 required=True,
             ),
             ToolParameter(
                 name="recursive",
                 type="boolean",
-                description="Set to true if deleting a directory.",
+                description="Set to true if deleting a non-empty directory (default: false).",
                 required=False,
                 default=False,
             ),
@@ -50,8 +41,9 @@ class DeleteFileTool(BaseTool):
     )
 
     async def execute(self, **kwargs: Any) -> str:
-        path = kwargs.get("path", "")
-        recursive = kwargs.get("recursive", False)
+        """Execute delete operation."""
+        path = kwargs.get("path", "").strip()
+        recursive = bool(kwargs.get("recursive", False))
 
         if not path:
             return "Error: Path is required."
@@ -59,16 +51,19 @@ class DeleteFileTool(BaseTool):
         try:
             target = self.resolve_path(path)
             if not target.exists():
-                return f"Error: Path not found: {path}"
+                return f"Error: Target path not found: '{path}'"
 
             if target.is_dir():
                 if not recursive:
-                    return f"Error: '{path}' is a directory. Set recursive=True to delete directory."
+                    return f"Error: '{path}' is a directory. Set 'recursive=True' to confirm directory deletion."
                 shutil.rmtree(target)
                 return f"Successfully deleted directory '{path}'."
             else:
                 target.unlink()
                 return f"Successfully deleted file '{path}'."
 
+        except PermissionError as e:
+            return f"Permission Denied: {e}"
         except Exception as e:
+            logger.error("Error deleting '%s': %s", path, e, exc_info=True)
             return f"Error deleting '{path}': {e}"

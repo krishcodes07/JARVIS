@@ -35,17 +35,43 @@ async def _search_user_messages(query: str, chat_id: str | None = None, limit: i
             target_desc = f"in chat '{chat_id}'" if chat_id else "across your chats"
             return f"Telegram: No messages matching '{query}' were found {target_desc}."
 
-        target_desc = f"in '{chat_id}'" if chat_id else "across your Telegram chats"
-        output = [f"🔍 Found {len(messages)} message(s) matching '{query}' {target_desc}:\n"]
+        msg_list = messages if isinstance(messages, list) else [messages]
 
-        for m in messages:
-            sender_id = m.sender_id or "Unknown"
-            date_str = m.date.strftime("%Y-%m-%d %H:%M:%S") if m.date else "N/A"
-            text_snippet = (m.text or "[Media/Attachment]").replace("\n", " ")
+        target_desc = f"in '{chat_id}'" if chat_id else "across your Telegram chats"
+        output = [f"🔍 Found {len(msg_list)} message(s) matching '{query}' {target_desc}:\n"]
+
+        for m in msg_list:
+            sender_id = getattr(m, "sender_id", None)
+            if sender_id is None and hasattr(m, "from_id") and m.from_id:
+                from_id = m.from_id
+                sender_id = (
+                    getattr(from_id, "user_id", None)
+                    or getattr(from_id, "channel_id", None)
+                    or getattr(from_id, "chat_id", None)
+                    or from_id
+                )
+            if sender_id is None and hasattr(m, "get_sender"):
+                try:
+                    sender = await m.get_sender()
+                    if sender:
+                        sender_id = (
+                            getattr(sender, "username", None)
+                            or getattr(sender, "first_name", None)
+                            or getattr(sender, "id", None)
+                        )
+                except Exception:
+                    pass
+            sender_id = sender_id or "Unknown"
+
+            msg_date = getattr(m, "date", None)
+            date_str = msg_date.strftime("%Y-%m-%d %H:%M:%S") if hasattr(msg_date, "strftime") else "N/A"
+            raw_text = getattr(m, "text", None) or getattr(m, "message", None) or "[Media/Attachment]"
+            text_snippet = str(raw_text).replace("\n", " ")
             if len(text_snippet) > 100:
                 text_snippet = text_snippet[:97] + "..."
 
-            output.append(f"  • [ID: {m.id}] ({date_str}) Sender: {sender_id}: {text_snippet}")
+            msg_id = getattr(m, "id", "N/A")
+            output.append(f"  • [ID: {msg_id}] ({date_str}) Sender: {sender_id}: {text_snippet}")
 
         return "\n".join(output)
 
