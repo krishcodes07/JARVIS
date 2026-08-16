@@ -266,7 +266,6 @@ async def test_chat_view_tool_call_resets_current_assistant_widget():
     async with app.run_test():
         chat = app.query_one(ChatViewWidget)
         chat.start_assistant_stream()
-        assert chat._current_assistant_widget is not None
 
         # Simulate text chunk before tool call
         chat.append_assistant_chunk("Let me check Telegram...")

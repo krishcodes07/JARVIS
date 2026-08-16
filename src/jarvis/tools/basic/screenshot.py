@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.core.config import PROJECT_ROOT
+from jarvis.core.paths import get_cache_dir
 from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ class ScreenshotTool(BaseTool):
                 target_path = PROJECT_ROOT / target_path
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            target_path = PROJECT_ROOT / "data" / "cache" / "screenshots" / f"screenshot_{timestamp}.png"
+            target_path = get_cache_dir() / "screenshots" / f"screenshot_{timestamp}.png"
 
         try:
             width, height = await asyncio.to_thread(_take_screenshot, target_path, region)

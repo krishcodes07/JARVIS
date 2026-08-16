@@ -24,6 +24,7 @@ from jarvis.prompts.system import SystemPromptBuilder
 from jarvis.providers.base import GenerationConfig, Message, ToolDefinition
 
 if TYPE_CHECKING:
+    from jarvis.connectors.manager import ConnectorManager
     from jarvis.core.config import JarvisConfig
     from jarvis.core.session import Session
     from jarvis.mcp.manager import MCPManager
@@ -63,6 +64,7 @@ class JarvisEngine:
         self.tool_executor: ToolExecutor | None = None
         self.mcp_manager: MCPManager | None = None
         self.voice_manager: VoiceManager | None = None
+        self.connector_manager: ConnectorManager | None = None
         self.prompt_builder: SystemPromptBuilder = SystemPromptBuilder()
         self.session: Session | None = None
         self._initialized: bool = False
@@ -99,6 +101,7 @@ class JarvisEngine:
         await self._init_tools(config)
         await self._init_mcp(config)
         await self._init_voice(config)
+        await self._init_connectors(config)
 
         # 3. Create session
         from jarvis.core.session import Session
@@ -131,7 +134,12 @@ class JarvisEngine:
         all_raw_defs = await self._get_all_raw_tool_definitions()
 
         # 3. Build system prompt & context
-        persona = get_persona(self.config.jarvis.persona)
+        thinking_enabled = (
+            self.config.provider.thinking
+            if (self.config and hasattr(self.config, "provider") and hasattr(self.config.provider, "thinking"))
+            else True
+        )
+        persona = get_persona(self.config.jarvis.persona, thinking=thinking_enabled)
 
         memory_ctx = ""
         if self.memory_manager:
@@ -144,26 +152,23 @@ class JarvisEngine:
             capability_summary=capability_summary,
         )
 
-        # 4. Save user message to memory
-        if self.memory_manager:
-            await self.memory_manager.add_message(session_id, "user", message)
-
-        # 5. Assemble messages pipeline
-        messages: list[Message] = [Message(role="system", content=system_prompt)]
-
-        # Fetch conversation history from memory store
+        # 4. Fetch conversation history from memory store and construct messages pipeline
+        history: list[dict[str, Any]] = []
         if self.memory_manager and self.memory_manager.conversation:
             history = await self.memory_manager.conversation.retrieve(session_id)
-            for msg in history:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                if role in ("user", "assistant"):
-                    messages.append(Message(role=role, content=content))
+
+        messages: list[Message] = self._build_messages_from_history(history, system_prompt)
+        messages.append(Message(role="user", content=message))
+
+        # 5. Save user message to memory
+        if self.memory_manager:
+            await self.memory_manager.add_message(session_id, "user", message)
 
         # 6. Tool execution & generation loop
         max_turns = self.config.tools.max_turns if (self.config and self.config.tools) else 25
         current_turn = 0
         on_tool_call = kwargs.get("on_tool_call")
+        on_tool_result = kwargs.get("on_tool_result")
         approval_callback = kwargs.get("approval_callback")
 
         while current_turn < max_turns:
@@ -188,7 +193,7 @@ class JarvisEngine:
                 self._schedule_memory_extraction(session_id, message, final_answer)
                 return final_answer
 
-            # Add assistant message with tool calls to conversation trace
+            # Add assistant message with tool calls to conversation trace & memory
             messages.append(
                 Message(
                     role="assistant",
@@ -196,6 +201,14 @@ class JarvisEngine:
                     tool_calls=response.tool_calls,
                 )
             )
+            if self.memory_manager:
+                await self.memory_manager.add_message(
+                    session_id,
+                    "assistant",
+                    response.content,
+                    tool_calls=response.tool_calls,
+                    model=self.last_used_model,
+                )
 
             # Execute tool calls
             for tool_call in response.tool_calls:
@@ -215,6 +228,12 @@ class JarvisEngine:
                 )
                 self._update_tool_defs_from_schema_call(tool_defs, tool_name, tool_args, all_raw_defs)
 
+                if callable(on_tool_result):
+                    with contextlib.suppress(Exception):
+                        res_out = on_tool_result(tool_name, result)
+                        if inspect.isawaitable(res_out):
+                            await res_out
+
                 # Record tool call and result in conversation memory
                 args_str = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
                 if self.memory_manager:
@@ -223,6 +242,7 @@ class JarvisEngine:
                         "tool",
                         result,
                         tool_name=tool_name,
+                        tool_call_id=tool_call_id,
                         args_str=args_str,
                     )
 
@@ -263,7 +283,12 @@ class JarvisEngine:
         tool_defs, capability_summary = await self._get_tool_definitions(query=message)
         all_raw_defs = await self._get_all_raw_tool_definitions()
 
-        persona = get_persona(self.config.jarvis.persona)
+        thinking_enabled = (
+            self.config.provider.thinking
+            if (self.config and hasattr(self.config, "provider") and hasattr(self.config.provider, "thinking"))
+            else True
+        )
+        persona = get_persona(self.config.jarvis.persona, thinking=thinking_enabled)
 
         memory_ctx = ""
         if self.memory_manager:
@@ -276,15 +301,11 @@ class JarvisEngine:
             capability_summary=capability_summary,
         )
 
-        messages: list[Message] = [Message(role="system", content=system_prompt)]
+        history: list[dict[str, Any]] = []
         if self.memory_manager and self.memory_manager.conversation:
             history = await self.memory_manager.conversation.retrieve(session_id)
-            for msg in history:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                if role in ("user", "assistant"):
-                    messages.append(Message(role=role, content=content))
 
+        messages: list[Message] = self._build_messages_from_history(history, system_prompt)
         messages.append(Message(role="user", content=message))
 
         if self.memory_manager:
@@ -330,7 +351,7 @@ class JarvisEngine:
                     self._schedule_memory_extraction(session_id, message, final_text)
                     return
 
-                # Assistant turn requested tools — append trace & execute
+                # Assistant turn requested tools — append trace & record in memory
                 messages.append(
                     Message(
                         role="assistant",
@@ -338,6 +359,14 @@ class JarvisEngine:
                         tool_calls=tool_calls,
                     )
                 )
+                if self.memory_manager:
+                    await self.memory_manager.add_message(
+                        session_id,
+                        "assistant",
+                        "".join(content_parts),
+                        tool_calls=tool_calls,
+                        model=self.last_used_model,
+                    )
 
                 for tool_call in tool_calls:
                     tool_name, tool_args, tool_call_id = self._parse_tool_call(tool_call)
@@ -358,7 +387,9 @@ class JarvisEngine:
 
                     if callable(on_tool_result):
                         with contextlib.suppress(Exception):
-                            on_tool_result(tool_name, result)
+                            res_out = on_tool_result(tool_name, result)
+                            if inspect.isawaitable(res_out):
+                                await res_out
 
                     # Record tool call and result in conversation memory
                     args_str = ", ".join(f"{k}={v!r}" for k, v in tool_args.items())
@@ -368,6 +399,7 @@ class JarvisEngine:
                             "tool",
                             result,
                             tool_name=tool_name,
+                            tool_call_id=tool_call_id,
                             args_str=args_str,
                         )
 
@@ -400,6 +432,9 @@ class JarvisEngine:
             await self.memory_manager.flush()
         if self.voice_manager:
             await self.voice_manager.shutdown()
+        if self.connector_manager:
+            await self.connector_manager.stop_all()
+            self.connector_manager = None
 
         self._initialized = False
         logger.info("JARVIS engine shut down.")
@@ -462,6 +497,82 @@ class JarvisEngine:
             self.voice_manager = None
             logger.warning(f"Voice manager failed to initialize ({e}); using text mode.")
 
+    async def _init_connectors(self, config: JarvisConfig) -> None:
+        """Initialize and auto-start enabled messaging platform connectors."""
+        if not config or not hasattr(config, "connectors") or not config.connectors.enabled:
+            self.connector_manager = None
+            return
+
+        from jarvis.connectors.manager import ConnectorManager
+        self.connector_manager = ConnectorManager(config, self)
+        await self.connector_manager.start_all()
+        logger.info("Connector manager initialized.")
+
+    def _build_messages_from_history(
+        self,
+        history: list[dict[str, Any]],
+        system_prompt: str,
+    ) -> list[Message]:
+        """Reconstruct full message sequence including tool calls and outputs from session history.
+
+        Args:
+            history: Raw message dictionaries retrieved from conversation memory.
+            system_prompt: The fresh system prompt.
+
+        Returns:
+            A list of typed Message objects properly paired for LLM consumption.
+        """
+        messages: list[Message] = [Message(role="system", content=system_prompt)]
+
+        for msg in history:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+
+            if role == "user":
+                messages.append(Message(role="user", content=content))
+            elif role == "assistant":
+                tool_calls = msg.get("tool_calls")
+                messages.append(
+                    Message(
+                        role="assistant",
+                        content=content,
+                        tool_calls=tool_calls if tool_calls else None,
+                    )
+                )
+            elif role == "tool":
+                tool_name = msg.get("tool_name") or msg.get("name")
+                tool_call_id = msg.get("tool_call_id") or (f"call_{tool_name}" if tool_name else "call_tool")
+
+                # If the preceding message is not an assistant message with tool_calls,
+                # synthesize the matching assistant tool_calls message for schema consistency.
+                if not messages or messages[-1].role != "assistant" or not messages[-1].tool_calls:
+                    synth_call = {
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {
+                            "name": tool_name or "tool",
+                            "arguments": "{}",
+                        },
+                    }
+                    messages.append(
+                        Message(
+                            role="assistant",
+                            content="",
+                            tool_calls=[synth_call],
+                        )
+                    )
+
+                messages.append(
+                    Message(
+                        role="tool",
+                        content=content,
+                        name=tool_name,
+                        tool_call_id=tool_call_id,
+                    )
+                )
+
+        return messages
+
     def _update_tool_defs_from_schema_call(
         self,
         tool_defs: list[ToolDefinition],
@@ -489,11 +600,13 @@ class JarvisEngine:
     def _get_capability_summary(self, all_tools: list[ToolDefinition]) -> str:
         """Generate a concise capability summary informing the model of discovery tools and skills."""
         skills_enabled = self.config.skills.enabled if (self.config and hasattr(self.config, "skills")) else True
-        skills_info = (
-            "\n- Use `list_skills()` to discover specialized procedural workflows/skills (e.g. deep-research, code-review)."
-            "\n- Use `get_skill(skill_name=...)` to retrieve full instructions and step-by-step guidance for a specific skill."
-            if skills_enabled else ""
-        )
+        skills_info = ""
+        if skills_enabled:
+            from jarvis.skills.manager import format_skills_for_prompt
+            skills_section = format_skills_for_prompt(config=self.config)
+            if skills_section:
+                skills_info = f"\n\n{skills_section}"
+
         return (
             "JARVIS has access to external tools and MCP capabilities.\n"
             "- Use `list_tools()` to discover all available tool names (built-in and MCP tools).\n"
@@ -526,7 +639,7 @@ class JarvisEngine:
     async def _get_tool_definitions(self, query: str | None = None) -> tuple[list[ToolDefinition], str]:
         """Convert registered tools into provider ToolDefinition list & capability summary.
 
-        Filters total tools down to always_include tools (including list_tools, get_schema, list_skills, get_skill).
+        Filters total tools down to always_include tools (including list_tools, get_schema, get_skill).
         """
         all_defs = await self._get_all_raw_tool_definitions()
         capability_summary = self._get_capability_summary(all_defs)
@@ -537,7 +650,6 @@ class JarvisEngine:
 
         always_inc_names.add("list_tools")
         always_inc_names.add("get_schema")
-        always_inc_names.add("list_skills")
         always_inc_names.add("get_skill")
 
         selected_tools = [t for t in all_defs if t.name in always_inc_names]

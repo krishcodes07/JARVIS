@@ -12,19 +12,6 @@
 
 ## Installation
 
-### Option A: Automated First-Time Setup (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/krishcodes07/JARVIS.git
-cd JARVIS
-
-# Run the interactive setup script
-python scripts/setup.py
-```
-
-### Option B: Manual Setup
-
 ```bash
 # Clone the repository
 git clone https://github.com/krishcodes07/JARVIS.git
@@ -88,14 +75,33 @@ provider:
 
 ## Launching JARVIS
 
-Start JARVIS using the active Terminal UI:
+### 1. Interactive Terminal UI (Default)
+
+Start JARVIS using the interactive Terminal UI:
 
 ```bash
 # Terminal UI (Default active interface)
 python main.py
+# or
+python -m jarvis --ui tui
 
 # Launch with Debug Logging enabled
 python main.py --debug
+```
+
+### 2. Messaging Connector Bridges (Background / Service Mode)
+
+Run JARVIS as a Telegram or Discord bot bridge:
+
+```bash
+# Run Telegram bot bridge
+python -m jarvis --connector telegram
+
+# Run Discord bot bridge
+python -m jarvis --connector discord
+
+# Run all enabled bridges simultaneously
+python -m jarvis --connector all
 ```
 
 ---

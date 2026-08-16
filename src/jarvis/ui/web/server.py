@@ -88,7 +88,17 @@ async def run_web(config: JarvisConfig) -> None:
 
     @app.get("/api/health")
     async def health():
-        return {"status": "healthy", "version": "0.1.0", "engine": engine._initialized}
+        connector_statuses = (
+            [s.model_dump() for s in engine.connector_manager.get_statuses()]
+            if engine.connector_manager
+            else []
+        )
+        return {
+            "status": "healthy",
+            "version": "0.1.0",
+            "engine": engine._initialized,
+            "connectors": connector_statuses,
+        }
 
     @app.on_event("shutdown")
     async def shutdown_event():

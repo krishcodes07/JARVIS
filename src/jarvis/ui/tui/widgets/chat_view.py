@@ -5,6 +5,7 @@ Professional layout with improved spacing, hierarchy, and visual clarity.
 
 from __future__ import annotations
 
+import re
 import time
 
 from rich.markdown import Markdown
@@ -15,6 +16,8 @@ from textual.message import Message as TextualMessage
 from textual.widgets import Static
 
 from jarvis.ui.tui.utils import format_tool_name, truncate_text
+
+THINK_REGEX = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 
 
 class MessageWidget(Static):
@@ -93,6 +96,142 @@ class MessageWidget(Static):
                     message_index=self.message_index,
                 )
             )
+
+
+class ThoughtWidget(Static):
+    """Clickable and collapsible thought/reasoning widget.
+
+    Displays 'Thinking...' with an animated indicator while active.
+    When finished, displays 'Thought (n seconds)' or 'Thought (450ms)'.
+    Clicking toggles between expanded and collapsed states.
+    """
+
+    DEFAULT_CSS = """
+    ThoughtWidget {
+        height: auto;
+        margin: 0 0 0 2;
+        padding: 0;
+    }
+
+    .thought-header {
+        color: #d97706;
+        height: 1;
+    }
+
+    .thought-header:hover {
+        color: #fbbf24;
+        text-style: underline;
+    }
+
+    .thought-content-block {
+        color: #a3a3a3;
+        padding: 0 0 0 2;
+        margin: 0;
+        display: none;
+    }
+
+    .thought-content-block.expanded {
+        display: block;
+    }
+    """
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self.raw_thought: str = ""
+        self._is_finished: bool = False
+        self._start_time: float = time.time()
+        self._elapsed_str: str = ""
+        self._expanded: bool = False
+        self._animation_frame: int = 0
+        self._timer = None
+
+        self.header_widget = Static(self._format_header(), classes="thought-header")
+        self.content_widget = Static("", classes="thought-content-block")
+
+    def _format_header(self) -> Text:
+        t = Text()
+        if not self._is_finished:
+            dots = "." * ((self._animation_frame % 3) + 1)
+            t.append("⟡ ", style="bold #d97706")
+            t.append(f"Thinking{dots}", style="italic #d97706")
+        else:
+            indicator = "▾ " if self._expanded else "▸ "
+            t.append(indicator, style="dim #a3a3a3")
+            if self._elapsed_str:
+                t.append(f"Thought ({self._elapsed_str})", style="italic #a3a3a3")
+            else:
+                t.append("Thought", style="italic #a3a3a3")
+        return t
+
+    def compose(self):
+        yield self.header_widget
+        yield self.content_widget
+
+    def on_mount(self) -> None:
+        if not self._is_finished:
+            self._timer = self.set_interval(0.3, self._tick_animation)
+
+    def _tick_animation(self) -> None:
+        if not self._is_finished:
+            self._animation_frame += 1
+            self.header_widget.update(self._format_header())
+
+    def append_chunk(self, chunk: str) -> None:
+        self.raw_thought += chunk
+        self._update_content_display()
+
+    def set_content(self, thought_text: str, elapsed_str: str = "") -> None:
+        self.raw_thought = thought_text
+        if elapsed_str:
+            self._elapsed_str = elapsed_str
+            self.finish(elapsed_str)
+        else:
+            self._update_content_display()
+
+    def _update_content_display(self) -> None:
+        if not self.raw_thought.strip():
+            self.content_widget.update(Text("", style="#a3a3a3"))
+            return
+        try:
+            self.content_widget.update(Markdown(self.raw_thought))
+        except Exception:
+            self.content_widget.update(Text(self.raw_thought, style="#a3a3a3"))
+
+    def finish(self, elapsed_str: str = "") -> None:
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
+        self._is_finished = True
+
+        if not elapsed_str:
+            elapsed = time.time() - self._start_time if self._start_time > 0 else 0
+            if elapsed < 1.0:
+                elapsed_str = f"{int(elapsed * 1000)}ms"
+            elif elapsed < 10.0:
+                elapsed_str = f"{elapsed:.1f}s"
+            else:
+                elapsed_str = f"{int(round(elapsed))}s"
+
+        self._elapsed_str = elapsed_str
+        self.header_widget.update(self._format_header())
+        self._update_content_display()
+
+    def toggle_expanded(self) -> None:
+        self._expanded = not self._expanded
+        if self._expanded:
+            self.content_widget.add_class("expanded")
+        else:
+            self.content_widget.remove_class("expanded")
+        self.header_widget.update(self._format_header())
+
+    def on_click(self, event: events.Click) -> None:
+        event.stop()
+        self.toggle_expanded()
+
+    def on_unmount(self) -> None:
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
 
 
 class ToolCallWidget(Static):
@@ -214,6 +353,7 @@ class ChatViewWidget(VerticalScroll):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._current_assistant_widget: MessageWidget | None = None
+        self._current_thought_widget: ThoughtWidget | None = None
         self._last_tool_widget: ToolCallWidget | None = None
         self._start_time: float = 0.0
         self._has_messages: bool = False
@@ -221,6 +361,8 @@ class ChatViewWidget(VerticalScroll):
         self._loading_frame: int = 0
         self._is_first_chunk: bool = False
         self._message_counter: int = 0  # Sequential index for user messages
+        self._in_think: bool = False
+        self._stream_buffer: str = ""
 
     @property
     def has_messages(self) -> bool:
@@ -231,10 +373,13 @@ class ChatViewWidget(VerticalScroll):
         for child in list(self.children):
             child.remove()
         self._current_assistant_widget = None
+        self._current_thought_widget = None
         self._last_tool_widget = None
         self._has_messages = False
         self._is_first_chunk = False
         self._message_counter = 0
+        self._in_think = False
+        self._stream_buffer = ""
         self.add_class("hidden")
 
     def remove_messages_from_index(self, from_index: int) -> None:
@@ -267,8 +412,11 @@ class ChatViewWidget(VerticalScroll):
 
         # Reset streaming state
         self._current_assistant_widget = None
+        self._current_thought_widget = None
         self._last_tool_widget = None
         self._is_first_chunk = False
+        self._in_think = False
+        self._stream_buffer = ""
 
         # Recalculate message counter from remaining user messages
         remaining_user_count = sum(
@@ -304,7 +452,7 @@ class ChatViewWidget(VerticalScroll):
             self._loading_timer = None
 
     def _update_loading_dots(self) -> None:
-        if self._current_assistant_widget and self._is_first_chunk:
+        if self._current_assistant_widget and self._is_first_chunk and not self._in_think:
             dots = "." * ((self._loading_frame % 3) + 1)
             self._loading_frame += 1
             self._current_assistant_widget.update_content(dots)
@@ -333,19 +481,72 @@ class ChatViewWidget(VerticalScroll):
         self.mount(msg)
         self.scroll_end(animate=False)
         self._current_assistant_widget = None
+        self._current_thought_widget = None
+        self._in_think = False
+        self._stream_buffer = ""
 
-    def add_thought(self, duration_ms: str = "407ms") -> None:
-        msg = MessageWidget(content=duration_ms, role="thought")
-        self.mount(msg)
+    def add_thought(self, content: str = "", duration_ms: str = "407ms") -> ThoughtWidget:
+        self._mark_has_messages()
+        tw = ThoughtWidget()
+        tw.set_content(content, elapsed_str=duration_ms)
+        self.mount(tw)
         self.scroll_end(animate=False)
+        return tw
+
+    def _start_thought(self) -> ThoughtWidget:
+        self._stop_loading_timer()
+        tw = ThoughtWidget()
+        self.mount(tw)
+        self._current_thought_widget = tw
+        self._scroll_to_bottom_if_auto()
+        return tw
+
+    def _append_thought_chunk(self, chunk: str) -> None:
+        if not chunk:
+            return
+        if self._current_thought_widget is None:
+            self._start_thought()
+        if self._current_thought_widget:
+            self._current_thought_widget.append_chunk(chunk)
+        self._scroll_to_bottom_if_auto()
+
+    def _finish_thought(self) -> None:
+        if self._current_thought_widget is not None:
+            self._current_thought_widget.finish()
+            self._current_thought_widget = None
+
+    def _append_text_chunk(self, chunk: str) -> None:
+        if not chunk:
+            return
+        self._mark_has_messages()
+        if self._current_assistant_widget is None:
+            msg = MessageWidget(content=chunk, role="assistant")
+            self.mount(msg)
+            self._current_assistant_widget = msg
+            self._is_first_chunk = False
+            self._stop_loading_timer()
+        else:
+            new_content = self._current_assistant_widget.raw_content + chunk
+            self._current_assistant_widget.update_content(new_content)
+        self._scroll_to_bottom_if_auto()
+
+    def _flush_stream_buffer(self) -> None:
+        if not self._stream_buffer:
+            return
+        buf = self._stream_buffer
+        self._stream_buffer = ""
+        if self._in_think:
+            self._append_thought_chunk(buf)
+            self._finish_thought()
+            self._in_think = False
+        else:
+            self._append_text_chunk(buf)
 
     def add_tool_call(self, tool_name: str, args_str: str) -> ToolCallWidget:
         self._stop_loading_timer()
-        if self._current_assistant_widget is not None:
-            if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
-                self._current_assistant_widget.remove()
-            self._current_assistant_widget = None
-            self._is_first_chunk = False
+        self._flush_stream_buffer()
+        self._finish_thought()
+        self._current_assistant_widget = None
 
         tool_w = ToolCallWidget(tool_name=tool_name, args_str=args_str)
         self.mount(tool_w)
@@ -355,12 +556,6 @@ class ChatViewWidget(VerticalScroll):
 
     def add_tool_output(self, output_text: str = "no output") -> None:
         self._stop_loading_timer()
-        if self._current_assistant_widget is not None:
-            if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
-                self._current_assistant_widget.remove()
-            self._current_assistant_widget = None
-            self._is_first_chunk = False
-
         if self._last_tool_widget is not None:
             self._last_tool_widget.set_output(output_text)
         else:
@@ -373,30 +568,23 @@ class ChatViewWidget(VerticalScroll):
 
     def add_error_message(self, text: str) -> None:
         self._stop_loading_timer()
-        if self._current_assistant_widget is not None:
-            if not self._current_assistant_widget.raw_content.strip() or self._is_first_chunk:
-                self._current_assistant_widget.remove()
-            self._current_assistant_widget = None
-            self._is_first_chunk = False
+        self._flush_stream_buffer()
+        self._finish_thought()
+        self._current_assistant_widget = None
         msg = MessageWidget(content=text, role="error")
         self.mount(msg)
         self._scroll_to_bottom_if_auto()
 
-    def start_assistant_stream(self) -> MessageWidget | None:
+    def start_assistant_stream(self) -> None:
         self._mark_has_messages()
         self._start_time = time.time()
         self._loading_frame = 0
         self._is_first_chunk = True
-
-        msg = MessageWidget(content=".", role="assistant")
-        self.mount(msg)
-        self._current_assistant_widget = msg
-
-        self._stop_loading_timer()
-        self._loading_timer = self.set_interval(0.3, self._update_loading_dots)
-
+        self._in_think = False
+        self._stream_buffer = ""
+        self._current_assistant_widget = None
+        self._current_thought_widget = None
         self.scroll_end(animate=False)
-        return self._current_assistant_widget
 
     def append_assistant_chunk(self, chunk: str) -> None:
         if not chunk:
@@ -405,20 +593,63 @@ class ChatViewWidget(VerticalScroll):
         if self._start_time == 0.0:
             self._start_time = time.time()
 
-        if self._current_assistant_widget is None:
-            msg = MessageWidget(content="", role="assistant")
-            self.mount(msg)
-            self._current_assistant_widget = msg
-            self._is_first_chunk = False
-            self._stop_loading_timer()
-        elif self._is_first_chunk:
-            self._is_first_chunk = False
-            self._stop_loading_timer()
-            self._current_assistant_widget.raw_content = ""
+        self._stream_buffer += chunk
 
-        new_content = self._current_assistant_widget.raw_content + chunk
-        self._current_assistant_widget.update_content(new_content)
-        self._scroll_to_bottom_if_auto()
+        while self._stream_buffer:
+            if not self._in_think:
+                idx = self._stream_buffer.find("<think>")
+                if idx != -1:
+                    before = self._stream_buffer[:idx]
+                    if before:
+                        self._append_text_chunk(before)
+                    self._stream_buffer = self._stream_buffer[idx + len("<think>"):]
+                    self._in_think = True
+                    self._start_thought()
+                else:
+                    match_len = 0
+                    for l in range(min(len(self._stream_buffer), 6), 0, -1):
+                        if "<think>".startswith(self._stream_buffer[-l:]):
+                            match_len = l
+                            break
+                    if match_len > 0:
+                        safe_text = self._stream_buffer[:-match_len]
+                        self._stream_buffer = self._stream_buffer[-match_len:]
+                        if safe_text:
+                            self._append_text_chunk(safe_text)
+                        break
+                    else:
+                        safe_text = self._stream_buffer
+                        self._stream_buffer = ""
+                        if safe_text:
+                            self._append_text_chunk(safe_text)
+                        break
+            else:
+                idx = self._stream_buffer.find("</think>")
+                if idx != -1:
+                    thought_before = self._stream_buffer[:idx]
+                    if thought_before:
+                        self._append_thought_chunk(thought_before)
+                    self._stream_buffer = self._stream_buffer[idx + len("</think>"):]
+                    self._in_think = False
+                    self._finish_thought()
+                else:
+                    match_len = 0
+                    for l in range(min(len(self._stream_buffer), 7), 0, -1):
+                        if "</think>".startswith(self._stream_buffer[-l:]):
+                            match_len = l
+                            break
+                    if match_len > 0:
+                        safe_thought = self._stream_buffer[:-match_len]
+                        self._stream_buffer = self._stream_buffer[-match_len:]
+                        if safe_thought:
+                            self._append_thought_chunk(safe_thought)
+                        break
+                    else:
+                        safe_thought = self._stream_buffer
+                        self._stream_buffer = ""
+                        if safe_thought:
+                            self._append_thought_chunk(safe_thought)
+                        break
 
     def update_assistant_stream(self, text: str) -> None:
         self.append_assistant_chunk(text)
@@ -427,16 +658,15 @@ class ChatViewWidget(VerticalScroll):
         self, mode: str = "", model_name: str = ""
     ) -> None:
         self._stop_loading_timer()
-        if self._current_assistant_widget is not None and self._is_first_chunk:
-            if not self._current_assistant_widget.raw_content.strip():
-                self._current_assistant_widget.remove()
-                self._current_assistant_widget = None
-            self._is_first_chunk = False
+        self._flush_stream_buffer()
+        self._finish_thought()
+
         elapsed_sec = time.time() - self._start_time if self._start_time > 0 else 0
         elapsed_str = f"{elapsed_sec:.1f}s"
         footer = AssistantFooterWidget(mode=mode, model=model_name, elapsed=elapsed_str)
         self.mount(footer)
         self._current_assistant_widget = None
+        self._current_thought_widget = None
         self._start_time = 0.0
         self._scroll_to_bottom_if_auto()
 
@@ -452,8 +682,18 @@ class ChatViewWidget(VerticalScroll):
                     self.add_user_message(content)
             elif role == "assistant":
                 if content:
-                    m = MessageWidget(content=content, role="assistant")
-                    self.mount(m)
+                    thoughts = THINK_REGEX.findall(content)
+                    cleaned_content = THINK_REGEX.sub("", content).strip()
+                    for thought_text in thoughts:
+                        thought_text = thought_text.strip()
+                        if thought_text:
+                            tw = ThoughtWidget()
+                            tw.set_content(thought_text, elapsed_str="done")
+                            self.mount(tw)
+
+                    if cleaned_content:
+                        m = MessageWidget(content=cleaned_content, role="assistant")
+                        self.mount(m)
                     saved_model = msg.get("model") or msg.get("model_name") or "JARVIS"
                     footer = AssistantFooterWidget(mode="", model=saved_model, elapsed="")
                     self.mount(footer)

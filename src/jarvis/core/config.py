@@ -68,16 +68,21 @@ def ensure_jarvis_home() -> Path:
 
     # Copy template config files from PROJECT_ROOT/config if missing in user home
     repo_config_dir = PROJECT_ROOT / "config"
-    if repo_config_dir.exists():
-        for item in ["jarvis.yaml", "providers.json", "models.json"]:
+    for item in ["jarvis.yaml", "providers.json", "models.json"]:
+        dst_file = config_dir / item
+        if not dst_file.exists():
             src_file = repo_config_dir / item
-            dst_file = config_dir / item
-            if src_file.exists() and not dst_file.exists():
+            if repo_config_dir.exists() and src_file.exists():
                 try:
                     shutil.copy2(src_file, dst_file)
                     logger.info(f"Initialized default config file {dst_file} from repository template.")
                 except Exception as e:
                     logger.warning(f"Failed to copy config template {src_file} to {dst_file}: {e}")
+            elif item == "jarvis.yaml":
+                try:
+                    JarvisConfig().save(dst_file)
+                except Exception as e:
+                    logger.warning(f"Failed to create default config file {dst_file}: {e}")
 
     # Copy .env template to ~/.jarvis/.env if missing
     user_env_file = home_dir / ".env"
@@ -134,6 +139,7 @@ class ProviderConfig(BaseModel):
     temperature: float = 0.7
     max_tokens: int = 4096
     top_p: float = 1.0
+    thinking: bool = True
     fallback: FallbackConfig = Field(default_factory=FallbackConfig)
 
 
@@ -204,7 +210,6 @@ class ToolsConfig(BaseModel):
             "delete_file",
             "web_search",
             "read_url",
-            "list_skills",
             "get_skill",
         ]
     )
@@ -316,6 +321,34 @@ class UIConfig(BaseModel):
     gui: GUIConfig = Field(default_factory=GUIConfig)
 
 
+class TelegramConnectorConfig(BaseModel):
+    """Telegram bot connector settings."""
+    enabled: bool = False
+    bot_token: str = ""                         # Can also be loaded from TELEGRAM_BOT_TOKEN env var
+    allowed_users: list[str | int] = Field(default_factory=list)  # Allowed user IDs or usernames (empty = allow all)
+    polling_timeout: int = 30                  # Long polling timeout in seconds
+    send_typing: bool = True                   # Send typing action while generating responses
+    max_message_length: int = 4000             # Telegram message character limit (max 4096)
+
+
+class DiscordConnectorConfig(BaseModel):
+    """Discord bot connector settings."""
+    enabled: bool = False
+    bot_token: str = ""                         # Can also be loaded from DISCORD_BOT_TOKEN env var
+    allowed_channels: list[str | int] = Field(default_factory=list)
+    allowed_users: list[str | int] = Field(default_factory=list)
+    allowed_guilds: list[str | int] = Field(default_factory=list)
+    send_typing: bool = True
+    max_message_length: int = 2000
+
+
+class ConnectorsConfig(BaseModel):
+    """External messaging connectors settings."""
+    enabled: bool = True                        # Master switch for connectors subsystem
+    telegram: TelegramConnectorConfig = Field(default_factory=TelegramConnectorConfig)
+    discord: DiscordConnectorConfig = Field(default_factory=DiscordConnectorConfig)
+
+
 class JarvisMetaConfig(BaseModel):
     """Top-level JARVIS metadata."""
     name: str = "JARVIS"
@@ -337,6 +370,7 @@ class JarvisConfig(BaseModel):
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    connectors: ConnectorsConfig = Field(default_factory=ConnectorsConfig)
 
     @classmethod
     def load(cls, config_path: Path | None = None) -> JarvisConfig:

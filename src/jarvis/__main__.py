@@ -24,6 +24,12 @@ def parse_args() -> argparse.Namespace:
         help="User interface to launch (default: from config)",
     )
     parser.add_argument(
+        "--connector",
+        choices=["telegram", "discord", "all"],
+        default=None,
+        help="Run messaging connector bridge in standalone service mode (e.g. telegram, all)",
+    )
+    parser.add_argument(
         "--config",
         type=str,
         default=None,
@@ -67,6 +73,12 @@ async def _run(args: argparse.Namespace) -> None:
     # Setup logging
     log_level = "DEBUG" if args.debug else config.jarvis.log_level
     setup_logging(level=log_level)
+
+    # Launch standalone connector if requested
+    if args.connector:
+        from jarvis.connectors.runner import run_connector_service
+        await run_connector_service(config, connector_name=args.connector)
+        return
 
     # Determine UI
     ui_type = args.ui or config.ui.default

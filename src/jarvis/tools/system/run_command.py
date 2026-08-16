@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from jarvis.core.config import PROJECT_ROOT
+from jarvis.core.paths import get_cache_dir
 from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema, truncate_output
 from jarvis.tools.sandbox import CommandPolicy, PathSandbox
 
@@ -150,7 +151,7 @@ class RunCommandTool(BaseTool):
             # Save full log if output is large
             combined_len = len(stdout_str) + len(stderr_str)
             if combined_len > 35_000 or stdout_str.count("\n") > 400:
-                log_dir = PROJECT_ROOT / "data" / "cache" / "command_logs"
+                log_dir = get_cache_dir() / "command_logs"
                 log_dir.mkdir(parents=True, exist_ok=True)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 log_file = log_dir / f"cmd_{timestamp}_{uuid.uuid4().hex[:6]}.log"
@@ -201,7 +202,7 @@ class RunCommandTool(BaseTool):
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
 
-        log_dir = PROJECT_ROOT / "data" / "cache" / "command_logs"
+        log_dir = get_cache_dir() / "command_logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / f"{task_id}.log"
         log_fp = open(log_file, "w", encoding="utf-8")

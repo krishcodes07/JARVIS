@@ -104,13 +104,61 @@ class GoogleProvider(BaseProvider):
                 logger.error(f"Google Stream API error ({response.status_code}): {err_msg}")
                 raise ProviderError(f"Google API Error ({response.status_code}): {err_msg}")
 
+            in_thought = False
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):
                     continue
                 data = json.loads(line[6:])
-                chunk = self._parse_stream_chunk(data)
-                if chunk:
-                    yield chunk
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    continue
+                parts = candidates[0].get("content", {}).get("parts", [])
+                text = ""
+                tool_calls: list[dict[str, Any]] = []
+                for part in parts:
+                    if "text" in part:
+                        p_text = part["text"]
+                        is_th = bool(part.get("thought"))
+                        if is_th and not in_thought:
+                            text += f"<think>\n{p_text}"
+                            in_thought = True
+                        elif not is_th and in_thought:
+                            text += f"\n</think>\n{p_text}"
+                            in_thought = False
+                        else:
+                            text += p_text
+                    elif "functionCall" in part:
+                        if in_thought:
+                            text += "\n</think>\n"
+                            in_thought = False
+                        fc = part["functionCall"]
+                        sig = self._extract_thought_signature(part, fc)
+                        tc_dict: dict[str, Any] = {
+                            "id": f"call_{fc['name']}",
+                            "type": "function",
+                            "function": {
+                                "name": fc["name"],
+                                "arguments": json.dumps(fc.get("args", {})),
+                            },
+                        }
+                        if sig:
+                            tc_dict["thought_signature"] = sig
+                        tool_calls.append(tc_dict)
+
+                finish_reason = candidates[0].get("finishReason")
+                if finish_reason and in_thought:
+                    text += "\n</think>\n"
+                    in_thought = False
+
+                if text or tool_calls or finish_reason:
+                    yield StreamChunk(
+                        content=text,
+                        tool_calls=tool_calls,
+                        finish_reason=finish_reason.lower() if finish_reason else None,
+                    )
+
+            if in_thought:
+                yield StreamChunk(content="\n</think>\n")
 
     async def embed(self, texts: list[str], model: str) -> list[list[float]]:
         """Generate embeddings using the Google Embeddings API."""
@@ -280,15 +328,19 @@ class GoogleProvider(BaseProvider):
             elif msg.role == "tool":
                 tool_name = msg.name or "tool"
                 tool_content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                contents.append({
-                    "role": "user",
-                    "parts": [{
-                        "functionResponse": {
-                            "name": tool_name,
-                            "response": {"name": tool_name, "content": tool_content},
-                        }
-                    }],
-                })
+                part = {
+                    "functionResponse": {
+                        "name": tool_name,
+                        "response": {"name": tool_name, "content": tool_content},
+                    }
+                }
+                if contents and contents[-1].get("role") == "user" and any("functionResponse" in p for p in contents[-1].get("parts", [])):
+                    contents[-1]["parts"].append(part)
+                else:
+                    contents.append({
+                        "role": "user",
+                        "parts": [part],
+                    })
             else:
                 role = "model" if msg.role == "assistant" else "user"
                 parts: list[dict[str, Any]] = []
@@ -399,7 +451,10 @@ class GoogleProvider(BaseProvider):
 
         for part in candidate.get("content", {}).get("parts", []):
             if "text" in part:
-                content_parts.append(part["text"])
+                if part.get("thought") is True or "thought" in part and part.get("thought"):
+                    content_parts.append(f"<think>\n{part['text']}\n</think>")
+                else:
+                    content_parts.append(part["text"])
             elif "functionCall" in part:
                 fc = part["functionCall"]
                 sig = self._extract_thought_signature(part, fc)

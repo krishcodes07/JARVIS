@@ -136,3 +136,163 @@ def test_google_provider_clean_schema():
     assert cleaned["properties"]["opt"]["nullable"] is True
 
 
+def test_anthropic_provider_format_messages():
+    anthropic_p = AnthropicProvider(api_key="test", base_url="https://api.anthropic.com")
+
+    messages = [
+        Message(role="system", content="System instruction"),
+        Message(role="user", content="What is 2+2?"),
+        Message(
+            role="assistant",
+            content="",
+            tool_calls=[{
+                "id": "tool_123",
+                "type": "function",
+                "function": {"name": "calc", "arguments": '{"expr": "2+2"}'},
+            }],
+        ),
+        Message(role="tool", name="calc", content="4", tool_call_id="tool_123"),
+        Message(role="assistant", content="The answer is 4."),
+    ]
+
+    sys_prompt, formatted = anthropic_p._split_system(messages)
+    assert sys_prompt == "System instruction"
+    assert len(formatted) == 4
+
+    assert formatted[0]["role"] == "user"
+    assert formatted[0]["content"] == "What is 2+2?"
+
+    # Assistant turn with tool_use
+    assert formatted[1]["role"] == "assistant"
+    assert isinstance(formatted[1]["content"], list)
+    assert formatted[1]["content"][0]["type"] == "tool_use"
+    assert formatted[1]["content"][0]["id"] == "tool_123"
+    assert formatted[1]["content"][0]["name"] == "calc"
+    assert formatted[1]["content"][0]["input"] == {"expr": "2+2"}
+
+    # User turn with tool_result
+    assert formatted[2]["role"] == "user"
+    assert isinstance(formatted[2]["content"], list)
+    assert formatted[2]["content"][0]["type"] == "tool_result"
+    assert formatted[2]["content"][0]["tool_use_id"] == "tool_123"
+    assert formatted[2]["content"][0]["content"] == "4"
+
+    # Final assistant turn
+    assert formatted[3]["role"] == "assistant"
+    assert formatted[3]["content"] == "The answer is 4."
+
+
+def test_openai_provider_format_messages():
+    openai_p = OpenAIProvider(api_key="test", base_url="https://api.openai.com/v1")
+
+    assistant_msg = Message(
+        role="assistant",
+        content="",
+        tool_calls=[{
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "search", "arguments": '{"q": "test"}'},
+        }],
+    )
+    formatted_assistant = openai_p._format_message(assistant_msg)
+    assert formatted_assistant["role"] == "assistant"
+    assert formatted_assistant["content"] is None
+    assert formatted_assistant["tool_calls"] == assistant_msg.tool_calls
+
+    tool_msg = Message(role="tool", name="search", content="search results", tool_call_id="call_1")
+    formatted_tool = openai_p._format_message(tool_msg)
+    assert formatted_tool["role"] == "tool"
+    assert formatted_tool["content"] == "search results"
+    assert formatted_tool["tool_call_id"] == "call_1"
+    assert formatted_tool["name"] == "search"
+
+
+def test_google_provider_multiple_tool_merging():
+    google_p = GoogleProvider(api_key="test", base_url="https://generativelanguage.googleapis.com/v1beta")
+
+    messages = [
+        Message(role="system", content="Sys"),
+        Message(role="user", content="Run two tools"),
+        Message(
+            role="assistant",
+            content="",
+            tool_calls=[
+                {"id": "c1", "type": "function", "function": {"name": "tool1", "arguments": "{}"}},
+                {"id": "c2", "type": "function", "function": {"name": "tool2", "arguments": "{}"}},
+            ],
+        ),
+        Message(role="tool", name="tool1", content="res1", tool_call_id="c1"),
+        Message(role="tool", name="tool2", content="res2", tool_call_id="c2"),
+    ]
+
+    _, contents = google_p._format_contents(messages)
+    # user turn, model turn, merged user tool turn
+    assert len(contents) == 3
+    assert contents[2]["role"] == "user"
+    assert len(contents[2]["parts"]) == 2
+    assert contents[2]["parts"][0]["functionResponse"]["name"] == "tool1"
+    assert contents[2]["parts"][1]["functionResponse"]["name"] == "tool2"
+
+
+def test_openai_provider_reasoning_parsing():
+    openai_p = OpenAIProvider(api_key="test", base_url="https://api.openai.com/v1")
+    raw = {
+        "choices": [
+            {
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello world!",
+                    "reasoning_content": "User said hi. I will greet them.",
+                },
+                "finish_reason": "stop",
+            }
+        ]
+    }
+    resp = openai_p._parse_response(raw)
+    assert "<think>" in resp.content
+    assert "User said hi. I will greet them." in resp.content
+    assert "</think>" in resp.content
+    assert "Hello world!" in resp.content
+
+
+def test_anthropic_provider_thinking_parsing():
+    anthropic_p = AnthropicProvider(api_key="test", base_url="https://api.anthropic.com")
+    raw = {
+        "content": [
+            {"type": "thinking", "thinking": "Internal analysis of the problem..."},
+            {"type": "text", "text": "Here is the final answer."},
+        ],
+        "stop_reason": "end_turn",
+        "usage": {"input_tokens": 10, "output_tokens": 20},
+    }
+    resp = anthropic_p._parse_response(raw)
+    assert "<think>" in resp.content
+    assert "Internal analysis of the problem..." in resp.content
+    assert "</think>" in resp.content
+    assert "Here is the final answer." in resp.content
+
+
+def test_google_provider_thought_parsing():
+    google_p = GoogleProvider(api_key="test", base_url="https://generativelanguage.googleapis.com/v1beta")
+    raw = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {"text": "Gemini internal reasoning...", "thought": True},
+                        {"text": "Direct response to user."},
+                    ]
+                },
+                "finishReason": "STOP",
+            }
+        ]
+    }
+    resp = google_p._parse_response(raw)
+    assert "<think>" in resp.content
+    assert "Gemini internal reasoning..." in resp.content
+    assert "</think>" in resp.content
+    assert "Direct response to user." in resp.content
+
+
+
+

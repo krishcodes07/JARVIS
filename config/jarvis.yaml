@@ -1,49 +1,50 @@
 jarvis:
-  name: JARVIS/
+  name: JARVIS
   version: 0.1.0
   persona: professional_assistant
   log_level: INFO
 provider:
-  active: opencode
-  model: mimo-v2.5-free
+  active: groq
+  model: llama-3.3-70b-versatile
   temperature: 0.7
-  max_tokens: 16000
+  max_tokens: 4096
   top_p: 1.0
+  thinking: true
   fallback:
     enabled: true
-    provider: kilo
-    model: kilo-auto/free
+    provider: openrouter
+    model: anthropic/claude-sonnet-4
 memory:
   conversation:
     enabled: true
     backend: json
-    max_messages: 30
+    max_messages: 100
     auto_summarize: true
-    summarize_after: 20
+    summarize_after: 50
   long_term:
     enabled: true
     auto_extract: true
-    provider: groq
-    model: llama-3.3-70b-versatile
-    storage_path: data/long_term_memory
+    provider: ''
+    model: ''
+    storage_path: workspace/long_term_memory
   vector:
     enabled: true
     backend: chromadb
-    embedding_provider: openrouter
-    embedding_model: nvidia/nemotron-3-embed-1b:free
+    embedding_provider: openai
+    embedding_model: text-embedding-3-small
     chunk_size: 512
     chunk_overlap: 50
     collection_name: jarvis_memory
-    storage_path: data/vector_store
-    knowledge_base_path: data/knowledge_base
+    storage_path: workspace/vector_store
+    knowledge_base_path: workspace/knowledge_base
 tools:
   enabled: true
-  auto_approve: true
-  max_turns: 100
+  auto_approve: false
+  max_turns: 25
   timeout: 30
   max_retries: 2
   sandbox:
-    enabled: false
+    enabled: true
     workspace: .
     extra_paths: []
     blocked_commands: []
@@ -54,10 +55,11 @@ tools:
   - read_file
   - write_file
   - edit_file
-  - run_command
+  - append_file
   - make_directory
   - delete_file
-  - list_skills
+  - web_search
+  - read_url
   - get_skill
   categories:
     basic: true
@@ -75,13 +77,13 @@ mcp:
   servers_config: src/jarvis/mcp/servers.json
   servers: {}
 voice:
-  enabled: true
-  mode: voice
+  enabled: false
+  mode: text
   auto_send_msg: true
   tts:
     provider: edge_tts
-    voice: en-GB-RyanNeural
-    model: eleven_multilingual_v2
+    voice: en-US-JennyNeural
+    model: ''
     rate: +0%
     volume: +0%
     pitch: +0Hz
@@ -106,9 +108,9 @@ voice:
 ui:
   default: tui
   tui:
-    theme: mercury
+    theme: dark
     show_tool_output: true
-    show_thinking: true
+    show_thinking: false
   web:
     host: 0.0.0.0
     port: 8000
@@ -118,3 +120,20 @@ ui:
     theme: dark
     window_size: 1200x800
     opacity: 0.95
+connectors:
+  enabled: true
+  telegram:
+    enabled: false
+    bot_token: ''
+    allowed_users: []
+    polling_timeout: 30
+    send_typing: true
+    max_message_length: 4000
+  discord:
+    enabled: false
+    bot_token: ''
+    allowed_channels: []
+    allowed_users: []
+    allowed_guilds: []
+    send_typing: true
+    max_message_length: 2000

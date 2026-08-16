@@ -97,6 +97,7 @@ class AnthropicProvider(BaseProvider):
                 raise ProviderError(f"Anthropic API Error ({response.status_code}): {err_msg}")
 
             tool_blocks: dict[int, dict[str, Any]] = {}
+            thinking_blocks: set[int] = set()
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):
                     continue
@@ -112,14 +113,22 @@ class AnthropicProvider(BaseProvider):
                             "name": block.get("name", ""),
                             "arguments": "",
                         }
+                    elif block.get("type") == "thinking":
+                        thinking_blocks.add(index)
+                        yield StreamChunk(content="<think>\n")
                 elif event_type == "content_block_delta":
                     delta = data.get("delta", {})
                     if delta.get("type") == "text_delta":
                         yield StreamChunk(content=delta.get("text", ""))
+                    elif delta.get("type") == "thinking_delta":
+                        yield StreamChunk(content=delta.get("thinking", ""))
                     elif delta.get("type") == "input_json_delta" and index in tool_blocks:
                         tool_blocks[index]["arguments"] += delta.get("partial_json", "")
                 elif event_type == "content_block_stop":
-                    if index in tool_blocks:
+                    if index in thinking_blocks:
+                        thinking_blocks.discard(index)
+                        yield StreamChunk(content="\n</think>\n")
+                    elif index in tool_blocks:
                         block = tool_blocks.pop(index)
                         yield StreamChunk(tool_calls=[{
                             "id": block["id"],
@@ -180,6 +189,21 @@ class AnthropicProvider(BaseProvider):
             if msg.role == "system":
                 text = msg.content if isinstance(msg.content, str) else str(msg.content)
                 system_parts.append(text)
+            elif msg.role == "tool":
+                call_id = msg.tool_call_id or f"call_{msg.name or 'tool'}"
+                content_str = msg.content if isinstance(msg.content, str) else str(msg.content)
+                tool_res = {
+                    "type": "tool_result",
+                    "tool_use_id": call_id,
+                    "content": content_str,
+                }
+                if formatted and formatted[-1].get("role") == "user" and isinstance(formatted[-1].get("content"), list):
+                    formatted[-1]["content"].append(tool_res)
+                else:
+                    formatted.append({
+                        "role": "user",
+                        "content": [tool_res],
+                    })
             else:
                 formatted.append(self._format_message(msg))
 
@@ -219,23 +243,33 @@ class AnthropicProvider(BaseProvider):
 
     def _format_message(self, message: Message) -> dict[str, Any]:
         """Format a message for the Anthropic API."""
-        msg: dict[str, Any] = {"role": message.role}
+        if message.role == "assistant" and message.tool_calls:
+            blocks: list[dict[str, Any]] = []
+            text = message.content if isinstance(message.content, str) else str(message.content)
+            if text:
+                blocks.append({"type": "text", "text": text})
 
-        if isinstance(message.content, str):
-            msg["content"] = message.content
-        else:
-            msg["content"] = message.content
+            for tc in message.tool_calls:
+                fn = tc.get("function", {})
+                args_raw = fn.get("arguments", {})
+                if isinstance(args_raw, str):
+                    try:
+                        args = json.loads(args_raw)
+                    except Exception:
+                        args = {"input": args_raw}
+                else:
+                    args = args_raw or {}
 
-        if message.tool_call_id:
-            msg["content"] = [
-                {
-                    "type": "tool_result",
-                    "tool_use_id": message.tool_call_id,
-                    "content": message.content,
-                }
-            ]
+                blocks.append({
+                    "type": "tool_use",
+                    "id": tc.get("id", f"call_{fn.get('name', 'tool')}"),
+                    "name": fn.get("name", "tool"),
+                    "input": args,
+                })
+            return {"role": "assistant", "content": blocks}
 
-        return msg
+        content_str = message.content if isinstance(message.content, str) else str(message.content)
+        return {"role": message.role, "content": content_str}
 
     def _parse_response(self, data: dict[str, Any]) -> GenerationResponse:
         """Parse Anthropic response into normalized format."""
@@ -245,6 +279,8 @@ class AnthropicProvider(BaseProvider):
         for block in data.get("content", []):
             if block["type"] == "text":
                 content_parts.append(block["text"])
+            elif block["type"] == "thinking":
+                content_parts.append(f"<think>\n{block.get('thinking', '')}\n</think>")
             elif block["type"] == "tool_use":
                 tool_calls.append({
                     "id": block["id"],

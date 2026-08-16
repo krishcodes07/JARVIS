@@ -27,22 +27,24 @@ python -m venv .venv
 # Install in development mode with all extras
 pip install -e ".[voice,mcp,dev]"
 
-# Run setup script
-python scripts/setup.py
-
-# Edit .env with your API keys
+# Copy .env template and add your API keys
+copy .env.example .env     # Windows
+# cp .env.example .env     # Linux/Mac
 ```
 
 ## Project Structure
 
-- `src/jarvis/core/` — Core engine and infrastructure
-- `src/jarvis/providers/` — LLM provider integrations and protocols
-- `src/jarvis/memory/` — Short-term, long-term, and vector RAG memory
-- `src/jarvis/tools/` — Built-in tools and security sandbox
+- `src/jarvis/connectors/` — Messaging platform bridges (Telegram, Discord) and standalone runner
+- `src/jarvis/core/` — Core engine, event bus, and hierarchical configuration
 - `src/jarvis/mcp/` — MCP (Model Context Protocol) subsystem and servers
-- `src/jarvis/voice/` — Voice synthesis (TTS), recognition (STT), and audio management
+- `src/jarvis/memory/` — Short-term, long-term, and vector RAG memory
+- `src/jarvis/prompts/` — System prompts and persona definitions
+- `src/jarvis/providers/` — LLM provider integrations and protocols (OpenAI, Anthropic, Google Gemini, models.dev)
+- `src/jarvis/skills/` — Specialized autonomous skill modules
+- `src/jarvis/tools/` — Built-in tools and security sandbox
 - `src/jarvis/ui/` — User interfaces (TUI, Web UI, Desktop GUI)
-- `config/` — Configuration files
+- `src/jarvis/voice/` — Voice synthesis (TTS), recognition (STT), and audio management
+- `config/` — Configuration templates
 - `tests/` — Test suite
 
 ## Code Standards

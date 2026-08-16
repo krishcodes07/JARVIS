@@ -41,6 +41,8 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 
 - **180+ LLM Provider Catalog (`models.dev`)** — Direct integration with 180+ LLM providers (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.) with automatic fallback streaming routing.
 - **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, keyboard shortcuts (`Ctrl+M` model picker, `Ctrl+A` API key modal), and voice toggle.
+- **Multi-Platform Messaging Connectors** — Bi-directional bot bridges for **Telegram** and **Discord** with user/channel allowlists, bot commands (`/session`, `/new`, `/clear`, `/status`, `/help`), and standalone background service modes.
+- **Specialized Skills Framework** — Modular skill packs for autonomous bug hunting, code review, fullstack coding, data analysis, deep research, and system architecture.
 - **Native MCP Ecosystem & Creation** — Seamlessly integrate Gmail, Calendar, Excel, Telegram, Filesystem, Terminal, Firecrawl, and Vercel — or let JARVIS generate custom MCP servers dynamically.
 - **Integrated Voice Suite** — Natural speech-to-text (STT) input and real-time streaming text-to-speech (TTS) output with hands-free conversation mode.
 
@@ -51,9 +53,11 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 | Component | Interface / Subsystem | Status | Technical Stack |
 | --- | --- | --- | --- |
 | **Terminal UI (TUI)** | Rich TUI Application | 🟢 **Active (In Dev)** | Python 3.11.4, Textual, Rich Markdown |
+| **Messaging Connectors** | Telegram & Discord Bridges | 🟢 **Active** | `python-telegram-bot`, `discord.py`, Asyncio |
 | **Web UI** | Web Dashboard | 🟡 *In Development (Non-functional)* | FastAPI, Uvicorn, WebSockets, Jinja2 |
-| **Desktop GUI** | Desktop Window | 🟡 *In Development (Non-functional)* | CustomTkinter, Asyncio integration |
+| **Desktop GUI** | Desktop Window | 🟡 *In Development (Non-functional)* | CustomTkinter / PySide6, Asyncio integration |
 | **Core Engine** | Orchestration & Events | 🟢 **Active** | Asyncio Event Bus, Pydantic v2 Config |
+| **Skills Subsystem** | Specialized Prompt Modules | 🟢 **Active** | Structured prompts, auto-discovery runner |
 | **Memory System** | Short & Long-term RAG | 🟢 **Active** | JSON session storage, ChromaDB Vector Store |
 | **MCP Manager** | Protocol Integration | 🟢 **Active** | Stdio transport, MCP SDK 1.0+, NPX runners |
 | **Voice Suite** | Speech Input / Output | 🟢 **Active** | Edge TTS, ElevenLabs, SpeechRecognition, `faster-whisper` |
@@ -63,31 +67,22 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 ## Features
 
 - **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), API key connector (`Ctrl+A`), and voice controls.
+- **Messaging Connectors (Telegram & Discord)** — Run JARVIS as a 24/7 personal assistant on Telegram and Discord with channel/user allowlists, message chunking, typing indicators, and session persistence.
 - **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fallback routing upon API errors.
+- **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, and `system-architecture`.
 - **Full Function Calling & Tool Support** — Native tool use support across OpenAI, Anthropic, and Google Gemini APIs (with native `functionCall` and `functionResponse` payload structure).
 - **Multi-Tiered Memory & RAG** — Conversation history with automatic summarization, autonomous long-term fact extraction, and vector semantic search powered by ChromaDB.
 - **Built-in Tools & Security Sandbox** — Calculator, clipboard manager, date/time utility, screenshot generator, web URL reader, process manager, and shell command runner operating inside a configurable security sandbox.
 - **Native MCP Integration** — Direct integration with stdio and npx Model Context Protocol servers (Gmail, Calendar, Excel, Telegram, Terminal, Filesystem, Firecrawl, Vercel).
 - **Real-time Voice Mode** — Speech-to-text input paired with edge/ElevenLabs text-to-speech streaming for hands-free operation.
-- **Fully Configurable** — YAML (`config/jarvis.yaml`), dynamic `models.dev` cache (`data/models_dev_cache.json`), and `.env` credentials.
+- **Fully Configurable** — YAML (`~/.jarvis/config/jarvis.yaml` or `config/jarvis.yaml`), dynamic `models.dev` cache (`data/models_dev_cache.json`), and `.env` credentials.
 - **Docker Ready** — Containerized multi-stage Docker build and one-command Docker Compose stack.
 
 ---
 
 ## Quick Start
 
-### Automated Setup (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/krishcodes07/JARVIS.git
-cd JARVIS
-
-# Run interactive automated setup
-python scripts/setup.py
-```
-
-### Manual Installation
+### Installation
 
 ```bash
 # Clone the repository
@@ -130,23 +125,35 @@ pip install -e ".[voice,mcp,dev]"
 
 ## Running JARVIS
 
-Launch JARVIS in the active Terminal UI:
+### 1. Terminal UI (Active Interactive Interface)
 
 ```bash
-# Terminal UI (Default active interface)
+# Launch interactive TUI
 python main.py
 # or
 python -m jarvis --ui tui
 
 # Launch with Debug Logging
 python main.py --debug
+```
 
-# Launch using quick development runner
-python scripts/dev.py
+### 2. Standalone Messaging Connector Services
+
+Run JARVIS as a background messaging bridge service:
+
+```bash
+# Run Telegram bot bridge
+python -m jarvis --connector telegram
+
+# Run Discord bot bridge
+python -m jarvis --connector discord
+
+# Run all enabled messaging bridges simultaneously
+python -m jarvis --connector all
 ```
 
 > [!NOTE]
-> Web UI (`--ui web`) and Desktop GUI (`--ui gui`) flags exist in CLI but are currently under development. Please use the TUI (`--ui tui`) interface.
+> Web UI (`--ui web`) and Desktop GUI (`--ui gui`) flags exist in CLI but are currently under development. Please use the TUI (`--ui tui`) interface or the Messaging Connectors (`--connector <name>`).
 
 ---
 
@@ -206,6 +213,38 @@ JARVIS features native Model Context Protocol support out-of-the-box:
 | 🖥️ **Terminal** | `stdio` | Inspect system processes and run shell commands | Built-in |
 | 🔍 **Firecrawl** | `stdio (npx)` | Real-time web scraping, crawling, and search | External |
 | 🚀 **Vercel** | `stdio (npx)` | Manage deployments, domains, and analytics | External |
+
+---
+
+## Multi-Platform Messaging Connectors
+
+JARVIS can be deployed as a personal AI bot across chat channels with full access to tools, memory, and models:
+
+| Platform | Connector | Configuration | Supported Features |
+| --- | --- | --- | --- |
+| ✈️ **Telegram** | `TelegramConnector` | `connectors.telegram.enabled: true` | Long-polling, typing action, user allowlist, slash commands |
+| 👾 **Discord** | `DiscordConnector` | `connectors.discord.enabled: true` | Channel / Guild / User allowlists, typing indicator, message splitting |
+
+### Connector In-Chat Commands
+All connectors support built-in command handlers:
+- `/session [id]` — Switch or view current chat session.
+- `/new` — Spawn a brand new independent conversation session.
+- `/clear` — Wipe session history and start clean.
+- `/status` — View connector uptime, current LLM model, and system health.
+- `/help` — List available connector bot commands.
+
+---
+
+## Specialized Skills Framework
+
+JARVIS includes pluggable, specialized skill engines located under `src/jarvis/skills/`:
+
+- 🐛 **`bug-hunting`** — Autonomous reproduction, root-cause debugging, hypothesis testing, and regression analysis.
+- 🔍 **`code-review`** — Automated code quality, security vulnerability auditing, and adherence to design patterns.
+- 💻 **`coding`** — Full-stack implementation, architecture scaffolding, refactoring, and clean code generation.
+- 📊 **`data-analysis`** — Exploratory data analysis, statistical breakdowns, and data visualization planning.
+- 🔬 **`deep-research`** — Recursive multi-source investigation, source synthesis, and executive briefing reports.
+- 🏛️ **`system-architecture`** — High-level distributed system design, API contracts, and scalability modeling.
 
 ---
 

@@ -596,6 +596,62 @@ Screen, MainScreen {
     margin: 1 0 0 0;
 }
 
+/* ─── Thought Widget ─── */
+ThoughtWidget {
+    height: auto;
+    margin: 0 0 0 2;
+    padding: 0;
+}
+
+.thought-header {
+    color: #d97706;
+    height: 1;
+}
+
+.thought-header:hover {
+    color: #fbbf24;
+    text-style: underline;
+}
+
+.thought-content-block {
+    color: #a3a3a3;
+    padding: 0 0 0 2;
+    margin: 0;
+    display: none;
+}
+
+.thought-content-block.expanded {
+    display: block;
+}
+
+/* ─── Tool Call Widget ─── */
+ToolCallWidget {
+    height: auto;
+    margin: 0 0 0 2;
+    padding: 0;
+}
+
+.tool-header {
+    color: #a3a3a3;
+    height: 1;
+}
+
+.tool-header:hover {
+    color: #ffffff;
+    text-style: underline;
+}
+
+.tool-output-block {
+    color: #737373;
+    padding: 0 0 0 2;
+    margin: 0;
+    display: none;
+}
+
+.tool-output-block.expanded {
+    display: block;
+}
+
 .chat-tool-command {
     background: $surface;
     color: $foreground;

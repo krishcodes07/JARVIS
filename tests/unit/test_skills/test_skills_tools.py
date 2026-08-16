@@ -1,5 +1,5 @@
 """
-Unit tests for JARVIS skills framework, list_skills tool, get_skill tool, skills config options, and engine prompt integration.
+Unit tests for JARVIS skills framework, format_skills_for_prompt, get_skill tool, skills config options, and engine prompt integration.
 """
 
 from __future__ import annotations
@@ -9,9 +9,8 @@ import pytest
 from jarvis.core.config import JarvisConfig, SkillsConfig
 from jarvis.core.engine import JarvisEngine
 from jarvis.core.exceptions import SkillNotFoundError
-from jarvis.skills.manager import get_skill_readme, list_available_skills
+from jarvis.skills.manager import format_skills_for_prompt, get_skill_readme, list_available_skills
 from jarvis.tools.basic.get_skill import GetSkillTool
-from jarvis.tools.basic.list_skills import ListSkillsTool
 
 
 def test_list_available_skills():
@@ -24,6 +23,19 @@ def test_list_available_skills():
     assert "bug-hunting" in skill_names
     assert "system-architecture" in skill_names
     assert "data-analysis" in skill_names
+    assert "coding" in skill_names
+
+    for s in skills:
+        assert s["description"] and s["description"] != "No description provided."
+
+
+def test_format_skills_for_prompt():
+    prompt_text = format_skills_for_prompt()
+    assert "Available Skills (Procedural Workflows)" in prompt_text
+    assert "`deep-research`:" in prompt_text
+    assert "`coding`:" in prompt_text
+    assert "`bug-hunting`:" in prompt_text
+    assert "get_skill(skill_name=...)" in prompt_text
 
 
 def test_get_skill_readme():
@@ -42,19 +54,6 @@ def test_get_skill_readme_not_found():
 
 
 @pytest.mark.asyncio
-async def test_list_skills_tool():
-    tool = ListSkillsTool()
-    output = await tool.execute()
-
-    assert "Available JARVIS Skills:" in output
-    assert "deep-research" in output
-    assert "code-review" in output
-    assert "bug-hunting" in output
-    assert "system-architecture" in output
-    assert "data-analysis" in output
-
-
-@pytest.mark.asyncio
 async def test_get_skill_tool():
     tool = GetSkillTool()
 
@@ -68,9 +67,9 @@ async def test_get_skill_tool():
 
 
 def test_config_always_include_skills():
-    config = JarvisConfig.load()
-    assert "list_skills" in config.tools.always_include
+    config = JarvisConfig()
     assert "get_skill" in config.tools.always_include
+    assert "list_skills" not in config.tools.always_include
     assert hasattr(config, "skills")
     assert config.skills.enabled is True
 
@@ -81,6 +80,9 @@ def test_skills_config_disable_all():
 
     skills = list_available_skills(config=config)
     assert skills == []
+
+    prompt_text = format_skills_for_prompt(config=config)
+    assert prompt_text == ""
 
     with pytest.raises(SkillNotFoundError):
         get_skill_readme("deep-research", config=config)
@@ -97,6 +99,10 @@ def test_skills_config_disable_particular_skill():
     assert "code-review" not in skill_names
     assert "bug-hunting" not in skill_names
 
+    prompt_text = format_skills_for_prompt(config=config)
+    assert "`deep-research`:" in prompt_text
+    assert "`code-review`:" not in prompt_text
+
     # Allowed skill works
     readme = get_skill_readme("deep-research", config=config)
     assert "# Deep Research Skill" in readme
@@ -112,10 +118,14 @@ def test_engine_capability_summary():
     engine.config = JarvisConfig()
     summary = engine._get_capability_summary([])
 
-    assert "list_skills()" in summary
+    assert "Available Skills (Procedural Workflows)" in summary
+    assert "`deep-research`:" in summary
+    assert "`coding`:" in summary
     assert "get_skill(skill_name=...)" in summary
+    assert "list_skills()" not in summary
 
     # When disabled
     engine.config.skills.enabled = False
     summary_disabled = engine._get_capability_summary([])
-    assert "list_skills()" not in summary_disabled
+    assert "Available Skills (Procedural Workflows):" not in summary_disabled
+    assert "`deep-research`:" not in summary_disabled

@@ -83,6 +83,35 @@ class MCPManager:
             except Exception as e:
                 logger.warning("Failed to connect MCP server '%s': %s", server_config.name, e)
 
+    async def connect_server(self, name: str) -> tuple[bool, str]:
+        """Connect to an MCP server by name at runtime."""
+        server_config = self.get_server_config(name, force_enabled=True)
+        if not server_config:
+            return False, f"Server '{name}' is not configured in servers.json or manifests."
+
+        manifest = self._manifests.get(server_config.name)
+        if manifest and manifest.required_env_vars:
+            ok, missing = PlatformHooksManager.check_environment(manifest, dict(os.environ))
+            if not ok:
+                return False, f"Missing required environment variables: {', '.join(missing)}"
+
+        try:
+            conn = await self.client.connect(server_config)
+            return True, f"Successfully connected to '{name}' ({len(conn.tools)} tools, {len(conn.resources)} resources)."
+        except Exception as e:
+            return False, f"Failed to connect to '{name}': {e}"
+
+    async def disconnect_server(self, name: str) -> tuple[bool, str]:
+        """Disconnect from an MCP server by name at runtime."""
+        if name not in self.client.connections:
+            return True, f"Server '{name}' is not currently connected."
+
+        try:
+            await self.client.disconnect(name)
+            return True, f"Successfully disconnected from MCP server '{name}'."
+        except Exception as e:
+            return False, f"Failed to disconnect from '{name}': {e}"
+
     async def shutdown(self) -> None:
         """Disconnect from all MCP servers and clear the registry."""
         await self.client.disconnect_all()
@@ -228,6 +257,9 @@ class MCPManager:
                 }
             )
         return available
+
+    # Alias for compatibility
+    list_available_servers = get_available_servers
 
     def get_server_config(self, name: str, force_enabled: bool = True) -> ServerConfig | None:
         """Build a ServerConfig object for a server by name from registry, manifest, or overrides."""

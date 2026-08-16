@@ -139,6 +139,32 @@ def list_available_skills(config: Any = None) -> list[dict[str, str]]:
     return skills
 
 
+def format_skills_for_prompt(config: Any = None) -> str:
+    """Format available skills (name and description) for injection into the system prompt.
+
+    Args:
+        config: Optional JarvisConfig instance.
+
+    Returns:
+        Formatted markdown string describing available skills and how to fetch them with get_skill.
+    """
+    if config and hasattr(config, "skills") and not config.skills.enabled:
+        return ""
+
+    skills = list_available_skills(config=config)
+    if not skills:
+        return ""
+
+    lines = [
+        "### Available Skills (Procedural Workflows)",
+        "When handling tasks matching any of these domains, use `get_skill(skill_name=...)` to retrieve the full step-by-step guidance, rules, and procedures before proceeding:",
+    ]
+    for s in skills:
+        lines.append(f"- `{s['name']}`: {s['description']}")
+
+    return "\n".join(lines)
+
+
 def get_skill_readme(skill_name: str, config: Any = None) -> str:
     """Get the full README content of a specific skill.
 

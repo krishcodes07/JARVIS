@@ -88,6 +88,17 @@ class ConversationStore(BaseMemory):
         if filepath.exists():
             filepath.unlink()
 
+    async def create_session(self, session_id: str) -> None:
+        """Explicitly create an empty session file and buffer on disk if not already existing."""
+        if session_id not in self._buffers:
+            self._buffers[session_id] = []
+        filepath = self._storage_dir / f"{session_id}.json"
+        if not filepath.exists():
+            try:
+                filepath.write_text("[]", encoding="utf-8")
+            except Exception as e:
+                logger.warning(f"Failed to create session file {filepath}: {e}")
+
     async def flush(self) -> None:
         """Persist all in-memory conversations to disk."""
         for session_id in self._buffers:
@@ -98,6 +109,47 @@ class ConversationStore(BaseMemory):
         return [
             p.stem for p in self._storage_dir.glob("*.json")
         ]
+
+    async def list_sessions_info(self, prefix: str = "") -> list[dict[str, Any]]:
+        """List session summaries with message counts, preview titles, and timestamps."""
+        results: list[dict[str, Any]] = []
+        for file in self._storage_dir.glob("*.json"):
+            sid = file.stem
+            if prefix and not sid.startswith(prefix):
+                continue
+
+            try:
+                messages = await self._load_session(sid)
+                msg_count = len(messages)
+                first_prompt = ""
+                for msg in messages:
+                    if msg.get("role") == "user" and msg.get("content"):
+                        first_prompt = str(msg.get("content", "")).strip()
+                        break
+
+                preview = (
+                    first_prompt[:45] + ("..." if len(first_prompt) > 45 else "")
+                    if first_prompt
+                    else "(Empty session)"
+                )
+                last_ts = messages[-1].get("timestamp") if messages else ""
+
+                results.append({
+                    "session_id": sid,
+                    "message_count": msg_count,
+                    "title": preview,
+                    "last_updated": last_ts,
+                })
+            except Exception as e:
+                logger.debug(f"Error loading session summary for {sid}: {e}")
+                results.append({
+                    "session_id": sid,
+                    "message_count": 0,
+                    "title": "(Unreadable session)",
+                    "last_updated": "",
+                })
+
+        return sorted(results, key=lambda s: str(s.get("last_updated", "")), reverse=True)
 
     async def truncate(self, session_id: str, keep_count: int) -> None:
         """Truncate conversation history, keeping only the first *keep_count* messages.
