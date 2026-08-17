@@ -49,3 +49,35 @@ def test_add_message_validation(tmp_path):
 
     with pytest.raises(ValueError, match="cannot be empty"):
         store.add_message(conv_id, "user", "   ")
+
+
+def test_conversation_view_clear_and_pending():
+    from PySide6.QtWidgets import QApplication
+    from jarvis.ui.gui.widgets.chat_view import ConversationView
+    from jarvis.ui.gui.themes import get_theme
+
+    app = QApplication.instance() or QApplication([])
+    view = ConversationView(get_theme("Midnight", "Electric Blue"))
+
+    # Add messages
+    view.add_message("user", "Hello")
+    view.add_message("assistant", "<think:6124c78e>Analyzing query</think:6124c78e>Hello world!")
+
+    # Show pending
+    view.show_pending()
+    assert view.pending_widget is not None
+
+    # Hide pending
+    view.hide_pending()
+    assert view.pending_widget is None
+
+    # Clear messages multiple times (ensure no NoneType errors)
+    view.clear_messages()
+    view.clear_messages()
+
+    # Add messages again and clear with pending active
+    view.add_message("user", "What's the status?")
+    view.show_pending()
+    view.clear_messages()
+    assert view.pending_widget is None
+

@@ -54,9 +54,29 @@ dependencies = [
 
     # Messaging Connectors
     "discord.py>=2.4.0",
+
+    # Desktop Automation & PC Control
+    "pyautogui>=0.9.54",
+    "pywinauto>=0.6.8",
+    "pygetwindow>=0.0.9",
+    "pycaw>=20240210",
+    "comtypes>=1.2.0",
+    "screeninfo>=0.8.1",
+    "pynput>=1.7.6",
+    "mss>=9.0",
 ]
 
 [project.optional-dependencies]
+automation = [
+    "pyautogui>=0.9.54",
+    "pywinauto>=0.6.8",
+    "pygetwindow>=0.0.9",
+    "pycaw>=20240210",
+    "comtypes>=1.2.0",
+    "screeninfo>=0.8.1",
+    "pynput>=1.7.6",
+    "mss>=9.0",
+]
 mcp = [
     "openpyxl>=3.1",
     "telethon>=1.36",

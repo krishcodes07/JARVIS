@@ -136,7 +136,7 @@ def markdown_to_discord_markdown(text: str) -> str:
         return f"\x00THINKBLOCK{idx}\x00"
 
     processed = re.sub(
-        r"<think>(.*?)(?:</think>|$)",
+        r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>(.*?)(?:</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>|$)",
         _save_think_block,
         text,
         flags=re.DOTALL | re.IGNORECASE,

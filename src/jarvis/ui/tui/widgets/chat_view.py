@@ -17,7 +17,13 @@ from textual.widgets import Static
 
 from jarvis.ui.tui.utils import format_tool_name, truncate_text
 
-THINK_REGEX = re.compile(r"<think>(.*?)</think>", re.DOTALL)
+THINK_TAG_OPEN_RE = re.compile(r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>", re.IGNORECASE)
+THINK_TAG_CLOSE_RE = re.compile(r"</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>", re.IGNORECASE)
+THINK_REGEX = re.compile(
+    r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>(.*?)</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>",
+    re.DOTALL | re.IGNORECASE,
+)
+
 
 
 class MessageWidget(Static):
@@ -536,11 +542,15 @@ class ChatViewWidget(VerticalScroll):
         buf = self._stream_buffer
         self._stream_buffer = ""
         if self._in_think:
-            self._append_thought_chunk(buf)
+            buf = THINK_TAG_CLOSE_RE.sub("", buf).rstrip()
+            if buf:
+                self._append_thought_chunk(buf)
             self._finish_thought()
             self._in_think = False
         else:
-            self._append_text_chunk(buf)
+            buf = THINK_TAG_OPEN_RE.sub("", buf)
+            if buf:
+                self._append_text_chunk(buf)
 
     def add_tool_call(self, tool_name: str, args_str: str) -> ToolCallWidget:
         self._stop_loading_timer()
@@ -597,59 +607,57 @@ class ChatViewWidget(VerticalScroll):
 
         while self._stream_buffer:
             if not self._in_think:
-                idx = self._stream_buffer.find("<think>")
-                if idx != -1:
-                    before = self._stream_buffer[:idx]
+                m = THINK_TAG_OPEN_RE.search(self._stream_buffer)
+                if m:
+                    before = self._stream_buffer[:m.start()]
                     if before:
                         self._append_text_chunk(before)
-                    self._stream_buffer = self._stream_buffer[idx + len("<think>"):]
+                    self._stream_buffer = self._stream_buffer[m.end():]
                     self._in_think = True
                     self._start_thought()
                 else:
-                    match_len = 0
-                    for l in range(min(len(self._stream_buffer), 6), 0, -1):
-                        if "<think>".startswith(self._stream_buffer[-l:]):
-                            match_len = l
+                    # Check if buffer ends with a potential opening tag prefix (e.g. "<th", "<think:61")
+                    m_partial = re.search(r"<[a-zA-Z0-9_:-]*$", self._stream_buffer)
+                    if m_partial:
+                        prefix = m_partial.group(0).lower()
+                        possible_tags = ("<think", "<thought", "<reasoning")
+                        if any(t.startswith(prefix) or prefix.startswith(t) for t in possible_tags):
+                            safe_text = self._stream_buffer[:m_partial.start()]
+                            self._stream_buffer = self._stream_buffer[m_partial.start():]
+                            if safe_text:
+                                self._append_text_chunk(safe_text)
                             break
-                    if match_len > 0:
-                        safe_text = self._stream_buffer[:-match_len]
-                        self._stream_buffer = self._stream_buffer[-match_len:]
-                        if safe_text:
-                            self._append_text_chunk(safe_text)
-                        break
-                    else:
-                        safe_text = self._stream_buffer
-                        self._stream_buffer = ""
-                        if safe_text:
-                            self._append_text_chunk(safe_text)
-                        break
+                    safe_text = self._stream_buffer
+                    self._stream_buffer = ""
+                    if safe_text:
+                        self._append_text_chunk(safe_text)
+                    break
             else:
-                idx = self._stream_buffer.find("</think>")
-                if idx != -1:
-                    thought_before = self._stream_buffer[:idx]
+                m = THINK_TAG_CLOSE_RE.search(self._stream_buffer)
+                if m:
+                    thought_before = self._stream_buffer[:m.start()]
                     if thought_before:
                         self._append_thought_chunk(thought_before)
-                    self._stream_buffer = self._stream_buffer[idx + len("</think>"):]
+                    self._stream_buffer = self._stream_buffer[m.end():]
                     self._in_think = False
                     self._finish_thought()
                 else:
-                    match_len = 0
-                    for l in range(min(len(self._stream_buffer), 7), 0, -1):
-                        if "</think>".startswith(self._stream_buffer[-l:]):
-                            match_len = l
+                    # Check if buffer ends with a potential closing tag prefix (e.g. "</th", "</think:61")
+                    m_partial = re.search(r"</[a-zA-Z0-9_:-]*$", self._stream_buffer)
+                    if m_partial:
+                        prefix = m_partial.group(0).lower()
+                        possible_tags = ("</think", "</thought", "</reasoning")
+                        if any(t.startswith(prefix) or prefix.startswith(t) for t in possible_tags):
+                            safe_thought = self._stream_buffer[:m_partial.start()]
+                            self._stream_buffer = self._stream_buffer[m_partial.start():]
+                            if safe_thought:
+                                self._append_thought_chunk(safe_thought)
                             break
-                    if match_len > 0:
-                        safe_thought = self._stream_buffer[:-match_len]
-                        self._stream_buffer = self._stream_buffer[-match_len:]
-                        if safe_thought:
-                            self._append_thought_chunk(safe_thought)
-                        break
-                    else:
-                        safe_thought = self._stream_buffer
-                        self._stream_buffer = ""
-                        if safe_thought:
-                            self._append_thought_chunk(safe_thought)
-                        break
+                    safe_thought = self._stream_buffer
+                    self._stream_buffer = ""
+                    if safe_thought:
+                        self._append_thought_chunk(safe_thought)
+                    break
 
     def update_assistant_stream(self, text: str) -> None:
         self.append_assistant_chunk(text)

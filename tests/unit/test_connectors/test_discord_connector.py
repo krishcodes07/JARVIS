@@ -47,6 +47,19 @@ def test_markdown_to_discord_markdown_with_think_tags():
     assert "Here is the table list." in formatted
 
 
+def test_markdown_to_discord_markdown_with_salted_think_tags():
+    """Test converting <think:hash> salted tags to Discord spoiler blockquotes without leaking hashes."""
+    raw = "<think:6124c78e>Checking Nainital district rain alert</think:6124c78e>Yellow alert active."
+    formatted = markdown_to_discord_markdown(raw)
+
+    assert "> 💭 **Thought**" in formatted
+    assert "||" in formatted
+    assert "Checking Nainital district rain alert" in formatted
+    assert "Yellow alert active." in formatted
+    assert "6124c78e" not in formatted
+
+
+
 def test_markdown_to_discord_markdown_tables():
     """Test converting Markdown tables to Discord monospace code blocks."""
     table_md = """Summary Table:

@@ -1,0 +1,3 @@
+"""
+Automation unit test suite.
+"""

@@ -40,6 +40,7 @@
 Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 180+ LLM providers via `models.dev` integration, interact via rich terminal TUI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
 
 - **180+ LLM Provider Catalog (`models.dev`)** — Direct integration with 180+ LLM providers (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.) with automatic fallback streaming routing.
+- **Full PC Control & Autonomous Desktop Automation** — End-to-end multi-step OS control (`/automate`), Windows UI Automation (UIA) tree inspection, dynamic application discovery, smooth mouse/keyboard simulation, and global emergency abort safety (`Ctrl+Alt+Q`).
 - **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, keyboard shortcuts (`Ctrl+M` model picker, `Ctrl+A` API key modal), and voice toggle.
 - **Multi-Platform Messaging Connectors** — Bi-directional bot bridges for **Telegram** and **Discord** with user/channel allowlists, bot commands (`/session`, `/new`, `/clear`, `/status`, `/help`), and standalone background service modes.
 - **Specialized Skills Framework** — Modular skill packs for autonomous bug hunting, code review, fullstack coding, data analysis, deep research, and system architecture.
@@ -53,6 +54,7 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 | Component | Interface / Subsystem | Status | Technical Stack |
 | --- | --- | --- | --- |
 | **Terminal UI (TUI)** | Rich TUI Application | 🟢 **Active (In Dev)** | Python 3.11.4, Textual, Rich Markdown |
+| **Desktop Automation** | Autonomous PC Control & Actuation | 🟢 **Active** | Windows UIA, PyAutoGUI, PyWinAuto, ScreenInfo, Pynput |
 | **Messaging Connectors** | Telegram & Discord Bridges | 🟢 **Active** | `python-telegram-bot`, `discord.py`, Asyncio |
 | **Web UI** | Web Dashboard | 🟡 *In Development (Non-functional)* | FastAPI, Uvicorn, WebSockets, Jinja2 |
 | **Desktop GUI** | Desktop Window | 🟡 *In Development (Non-functional)* | CustomTkinter / PySide6, Asyncio integration |
@@ -66,13 +68,14 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 
 ## Features
 
+- **Autonomous PC Control & Desktop Automation** — Execute multi-step desktop workflows (`/automate <goal>`), launch & control apps, browse websites, manage window layouts (snapping, maximizing), adjust system audio volume, and simulate mouse/keyboard with emergency abort failsafes (`Ctrl+Alt+Q`).
 - **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), API key connector (`Ctrl+A`), and voice controls.
 - **Messaging Connectors (Telegram & Discord)** — Run JARVIS as a 24/7 personal assistant on Telegram and Discord with channel/user allowlists, message chunking, typing indicators, and session persistence.
 - **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fallback routing upon API errors.
 - **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, and `system-architecture`.
 - **Full Function Calling & Tool Support** — Native tool use support across OpenAI, Anthropic, and Google Gemini APIs (with native `functionCall` and `functionResponse` payload structure).
 - **Multi-Tiered Memory & RAG** — Conversation history with automatic summarization, autonomous long-term fact extraction, and vector semantic search powered by ChromaDB.
-- **Built-in Tools & Security Sandbox** — Calculator, clipboard manager, date/time utility, screenshot generator, web URL reader, process manager, and shell command runner operating inside a configurable security sandbox.
+- **Built-in Tools & Security Sandbox** — Desktop tools (`app_control`, `browser_control`, `window_control`, `media_control`, `system_settings`, `input_simulation`, `automate_task`), filesystem tools, calculator, screenshot generator, and command runner operating inside a configurable security sandbox.
 - **Native MCP Integration** — Direct integration with stdio and npx Model Context Protocol servers (Gmail, Calendar, Excel, Telegram, Terminal, Filesystem, Firecrawl, Vercel).
 - **Real-time Voice Mode** — Speech-to-text input paired with edge/ElevenLabs text-to-speech streaming for hands-free operation.
 - **Fully Configurable** — YAML (`~/.jarvis/config/jarvis.yaml` or `config/jarvis.yaml`), dynamic `models.dev` cache (`data/models_dev_cache.json`), and `.env` credentials.
@@ -108,6 +111,9 @@ copy .env.example .env          # Windows
 Select extra dependency packages depending on your needs:
 
 ```bash
+# Install PC Control & Desktop Automation dependencies
+pip install -e ".[automation]"
+
 # Install Voice dependencies (Edge TTS, ElevenLabs, SpeechRecognition, faster-whisper)
 pip install -e ".[voice]"
 
@@ -118,7 +124,7 @@ pip install -e ".[mcp]"
 pip install -e ".[dev]"
 
 # Install ALL features at once
-pip install -e ".[voice,mcp,dev]"
+pip install -e ".[automation,voice,mcp,dev]"
 ```
 
 ---
@@ -180,23 +186,30 @@ python -m jarvis --connector all
 
 JARVIS includes out-of-the-box tools categorized by safety levels:
 
+- **Desktop Control Tools**: `app_control`, `browser_control`, `window_control`, `media_control`, `system_settings`, `input_simulation`, `automate_task`
 - **Basic Tools**: `calculator`, `clipboard`, `datetime_tool`, `screenshot`, `url_reader`
 - **Filesystem Tools**: `read_file`, `write_file`, `edit_file`, `append_file`, `list_directory`, `make_directory`, `delete_file`, `copy_file`, `move_file`, `search_files`, `grep_search`, `get_file_info`
 - **System Tools**: `process_manager`, `run_command`, `system_info`
 
 ### Permissions & Sandboxing
 
-JARVIS enforces safety constraints when executing system commands:
+JARVIS enforces safety constraints when executing system commands and desktop actions:
+- **Sandbox Restrictions**: Workspace isolation and blocking of dangerous shell commands.
+- **Desktop Emergency Abort**: Press `Ctrl+Alt+Q` at any time to instantly freeze and abort autonomous desktop automation.
+- **Protected Applications**: Automatic refusal to actuate inside sensitive windows (e.g. password managers, security prompts).
 
 ```yaml
 tools:
+  categories:
+    desktop: true
+    filesystem: true
+    system: true
+    basic: true
   sandbox:
     enabled: true
     workspace: "."
     blocked_commands: ["rm -rf /", "format", "shutdown"]
 ```
-
-When sandbox mode is enabled (`tools.sandbox.enabled: true`), execution is restricted strictly within the workspace directory, and blocked dangerous commands are intercepted before shell invocation.
 
 ---
 
@@ -259,6 +272,7 @@ JARVIS includes a full hands-free voice suite:
 
 JARVIS TUI supports rich interactive slash commands:
 
+- `/automate <goal>` or `/pc <goal>` — Run an autonomous multi-step PC desktop automation workflow.
 - `/new` — Start a new conversation session with a unique session ID.
 - `/clear` — Reset conversation, delete current session, and start a fresh session (with top-right notification toast).
 - `/copy` — Copy the last AI assistant response directly to system clipboard silently.

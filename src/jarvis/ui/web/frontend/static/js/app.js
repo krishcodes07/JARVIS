@@ -195,8 +195,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function parseMarkdown(text) {
     if (!text) return '';
+    // Handle thinking tags: <think...>...</think...> or unclosed <think...>
+    let parsed = text.replace(
+      /<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>([\s\S]*?)(?:<\/(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>|$)/gi,
+      (match, thought) => {
+        const trimmed = thought.trim();
+        if (!trimmed) return '';
+        return `<details class="thought-box"><summary class="thought-summary">💭 Thought</summary><div class="thought-content">${trimmed}</div></details>`;
+      }
+    );
+
     // Simple markdown parsing
-    return text
+    return parsed
       .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')

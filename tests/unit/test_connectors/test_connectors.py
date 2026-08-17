@@ -660,6 +660,22 @@ def test_markdown_to_telegram_html_with_think_tags():
     assert "• Item A" in result
 
 
+def test_markdown_to_telegram_html_with_salted_think_tags():
+    """Test that salted <think:hash>...</think:hash> tags are converted without leaking hashes."""
+    from jarvis.connectors.telegram.formatter import markdown_to_telegram_html
+
+    raw_text = "<think:6124c78e>Checking rain alert status</think:6124c78e>Yes, sir – there is a rain alert."
+    result = markdown_to_telegram_html(raw_text)
+
+    assert "<blockquote expandable>" in result
+    assert "💭 <b>Thought</b>" in result
+    assert "Checking rain alert status" in result
+    assert "</blockquote>" in result
+    assert "Yes, sir – there is a rain alert." in result
+    assert "6124c78e" not in result
+
+
+
 @pytest.mark.asyncio
 async def test_telegram_connector_thinking_status_update():
     """Test that TelegramConnector updates placeholder message to Thinking... when AI thinks."""

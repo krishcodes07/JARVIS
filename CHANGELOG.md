@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Full PC Control & Autonomous Desktop Automation Subsystem**:
+  - `AutomationAgent`: Autonomous multi-step *Observe $\rightarrow$ Ground $\rightarrow$ Plan $\rightarrow$ Safety Check $\rightarrow$ Act $\rightarrow$ Verify* loop.
+  - `UIAGrounder`: Native Windows UI Automation accessibility tree parser extracting interactive controls and coordinates.
+  - `VisualGrounder`: High-speed screenshot capture (`mss`), Set-of-Marks (SoM) visual marker overlay generator, and visual delta calculator.
+  - `DesktopController`: Actuation driver for smooth human-like mouse glide, safe clipboard-assisted typing, window management (focus, minimize, maximize, snap), app launching, and system volume/media keys.
+  - `SafetyGuard`: Background emergency abort listener (`Ctrl+Alt+Q`), screen corner failsafe, protected application blacklist, and destructive action gating.
+  - TUI slash commands: `/automate <goal>` and `/pc <goal>`.
+- **Discrete Desktop Tools (`src/jarvis/tools/desktop/`)**:
+  - `AppControlTool`: Launch, list, focus, close, or terminate applications.
+  - `BrowserControlTool`: Open URLs, Google searches, and manage browser tabs (`new_tab`, `close_tab`, `switch_tab`, `reopen_tab`, `incognito`).
+  - `WindowControlTool`: List open windows, focus, minimize, maximize, and snap windows.
+  - `MediaControlTool`: Master audio volume adjustment (0-100%), mute/unmute, and media playback control (`play_pause`, `next`, `prev`).
+  - `SystemSettingsTool`: Workstation lock, screen brightness, battery inspection, and native Windows toast notifications.
+  - `InputSimulationTool`: Simulate clicks, double clicks, right clicks, typing, and keyboard shortcuts.
+  - `AutomateTaskTool`: Natural language delegation of complex goals to `AutomationAgent`.
 - **Multi-Platform Messaging Connectors**:
   - `TelegramConnector`: Native long-polling bridge with typing indicator, message chunking, allowlist security, and session routing.
   - `DiscordConnector`: Full discord.py bot bridge with guild/channel/user allowlists, typing triggers, and multi-message splitting.

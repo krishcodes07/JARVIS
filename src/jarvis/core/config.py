@@ -62,6 +62,7 @@ def ensure_jarvis_home() -> Path:
         workspace_dir / "cache",
         workspace_dir / "gui",
         workspace_dir / "skills",
+        workspace_dir / "automation_logs",
     ]
     for d in subdirs:
         d.mkdir(parents=True, exist_ok=True)
@@ -214,7 +215,13 @@ class ToolsConfig(BaseModel):
         ]
     )
     categories: dict[str, bool] = Field(
-        default_factory=lambda: {"basic": True, "filesystem": True, "system": True, "code": True}
+        default_factory=lambda: {
+            "basic": True,
+            "filesystem": True,
+            "system": True,
+            "code": True,
+            "desktop": True,
+        }
     )
 
 
@@ -342,6 +349,31 @@ class DiscordConnectorConfig(BaseModel):
     max_message_length: int = 2000
 
 
+class AutomationConfig(BaseModel):
+    """Full PC Control and Desktop Automation settings."""
+    enabled: bool = True
+    grounding_mode: str = "uia"                     # uia | vision | hybrid
+    max_steps: int = 30                             # Maximum autonomous execution steps per goal
+    step_delay: float = 0.5                         # Delay in seconds between actions
+    emergency_hotkey: str = "ctrl+alt+q"            # Global emergency abort key sequence
+    failsafe: bool = True                           # PyAutoGUI mouse corner failsafe
+    human_mouse_speed: bool = True                  # Smooth human-like mouse glide
+    mouse_speed_seconds: float = 0.3                # Average glide duration for mouse movements
+    screenshot_downscale: float = 1.0               # Scale factor for screenshot capture
+    protected_apps: list[str] = Field(
+        default_factory=lambda: [
+            "1password",
+            "bitwarden",
+            "keepass",
+            "lastpass",
+            "authenticator",
+            "windows security",
+        ]
+    )
+    require_confirmation_for_sensitive: bool = True # Gate destructive actions
+    log_screenshots: bool = True                    # Save step screenshots in workspace/automation_logs
+
+
 class ConnectorsConfig(BaseModel):
     """External messaging connectors settings."""
     enabled: bool = True                        # Master switch for connectors subsystem
@@ -371,6 +403,7 @@ class JarvisConfig(BaseModel):
     voice: VoiceConfig = Field(default_factory=VoiceConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
     connectors: ConnectorsConfig = Field(default_factory=ConnectorsConfig)
+    automation: AutomationConfig = Field(default_factory=AutomationConfig)
 
     @classmethod
     def load(cls, config_path: Path | None = None) -> JarvisConfig:

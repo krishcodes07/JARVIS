@@ -317,3 +317,31 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 0 20px var(--accent-glow);
 }
+
+.thought-box {
+  margin-bottom: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.thought-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #f59e0b;
+  user-select: none;
+  outline: none;
+}
+
+.thought-content {
+  margin-top: 8px;
+  font-style: italic;
+  white-space: pre-wrap;
+  line-height: 1.5;
+  border-top: 1px dashed rgba(245, 158, 11, 0.2);
+  padding-top: 6px;
+}
+

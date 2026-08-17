@@ -140,3 +140,57 @@ def test_persona_thinking_toggle():
     assert "## Thinking & Reasoning Rules" not in persona_without_thinking
     assert "<think>...</think>" not in persona_without_thinking
     assert "You are JARVIS" in persona_without_thinking
+
+
+@pytest.mark.asyncio
+async def test_chat_view_salted_think_tags():
+    """Verify that salted tags like <think:6124c78e>...</think:6124c78e> are cleanly parsed."""
+    app = ChatTestApp()
+    async with app.run_test():
+        chat = app.query_one(ChatViewWidget)
+        chat.start_assistant_stream()
+
+        # Simulate streaming salted think tags as produced by reasoning models
+        chat.append_assistant_chunk("<think:6124c78e>Checking rain alert status.")
+        chat.append_assistant_chunk(" Weather data looks wet.</think:6124c78e>Yes, sir – there is a rain alert.")
+
+        thought_widgets = [c for c in chat.children if isinstance(c, ThoughtWidget)]
+        message_widgets = [c for c in chat.children if isinstance(c, MessageWidget) and c.role == "assistant"]
+
+        assert len(thought_widgets) == 1
+        assert thought_widgets[0].raw_thought == "Checking rain alert status. Weather data looks wet."
+        assert thought_widgets[0]._is_finished is True
+
+        assert len(message_widgets) == 1
+        assert "Yes, sir – there is a rain alert." in message_widgets[0].raw_content
+        # Ensure no tag suffix leaked into the message
+        assert "6124c78e" not in message_widgets[0].raw_content
+        assert "</think" not in message_widgets[0].raw_content
+
+
+@pytest.mark.asyncio
+async def test_chat_view_load_history_with_salted_think_tags():
+    """Verify that history loading handles salted and variant think tags without tag leakage."""
+    app = ChatTestApp()
+    async with app.run_test():
+        chat = app.query_one(ChatViewWidget)
+        history = [
+            {"role": "user", "content": "Weather in Haldwani?"},
+            {
+                "role": "assistant",
+                "content": "<think:6124c78e>Analyzing Nainital district alert levels.</think:6124c78e>Yellow alert for heavy rainfall today.",
+                "model": "tencent/hy3:free",
+            },
+        ]
+        chat.load_session_history(history)
+
+        thought_widgets = [c for c in chat.children if isinstance(c, ThoughtWidget)]
+        assistant_widgets = [c for c in chat.children if isinstance(c, MessageWidget) and c.role == "assistant"]
+
+        assert len(thought_widgets) == 1
+        assert thought_widgets[0].raw_thought == "Analyzing Nainital district alert levels."
+
+        assert len(assistant_widgets) == 1
+        assert assistant_widgets[0].raw_content == "Yellow alert for heavy rainfall today."
+        assert "6124c78e" not in assistant_widgets[0].raw_content
+

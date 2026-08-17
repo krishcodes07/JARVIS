@@ -24,6 +24,8 @@ from jarvis.prompts.system import SystemPromptBuilder
 from jarvis.providers.base import GenerationConfig, Message, ToolDefinition
 
 if TYPE_CHECKING:
+    from jarvis.automation.engine import AutomationEngine
+    from jarvis.automation.schemas import AutomationGoal
     from jarvis.connectors.manager import ConnectorManager
     from jarvis.core.config import JarvisConfig
     from jarvis.core.session import Session
@@ -65,6 +67,7 @@ class JarvisEngine:
         self.mcp_manager: MCPManager | None = None
         self.voice_manager: VoiceManager | None = None
         self.connector_manager: ConnectorManager | None = None
+        self.automation_engine: AutomationEngine | None = None
         self.prompt_builder: SystemPromptBuilder = SystemPromptBuilder()
         self.session: Session | None = None
         self._initialized: bool = False
@@ -102,6 +105,7 @@ class JarvisEngine:
         await self._init_mcp(config)
         await self._init_voice(config)
         await self._init_connectors(config)
+        await self._init_automation(config)
 
         # 3. Create session
         from jarvis.core.session import Session
@@ -435,9 +439,39 @@ class JarvisEngine:
         if self.connector_manager:
             await self.connector_manager.stop_all()
             self.connector_manager = None
+        if self.automation_engine:
+            await self.automation_engine.shutdown()
+            self.automation_engine = None
 
         self._initialized = False
         logger.info("JARVIS engine shut down.")
+
+    async def execute_pc_automation(
+        self,
+        goal: str,
+        max_steps: int | None = None,
+        on_step_callback: Any = None,
+        on_status_callback: Any = None,
+    ) -> AutomationGoal:
+        """Execute an autonomous PC desktop goal directly.
+
+        Args:
+            goal: Natural language PC control instruction.
+            max_steps: Optional step limit override.
+            on_step_callback: Callback triggered after each step.
+            on_status_callback: Callback triggered on status change.
+
+        Returns:
+            Completed or failed AutomationGoal trace.
+        """
+        if not self.automation_engine:
+            raise RuntimeError("Automation subsystem is not enabled in configuration.")
+        return await self.automation_engine.execute_task(
+            goal=goal,
+            max_steps=max_steps,
+            on_step_callback=on_step_callback,
+            on_status_callback=on_status_callback,
+        )
 
     # ─── Private initialization & helper methods ───────────────
 
@@ -466,6 +500,15 @@ class JarvisEngine:
         from jarvis.tools.registry import ToolRegistry
         self.tool_registry = ToolRegistry(config)
         self.tool_registry.discover_tools()
+
+        # Wire provider_manager into tools that need agent delegation
+        if "automate_task" in self.tool_registry:
+            tool_inst = self.tool_registry.get("automate_task")
+            if hasattr(tool_inst, "set_provider_manager"):
+                tool_inst.set_provider_manager(self.provider_manager)
+            else:
+                setattr(tool_inst, "_provider_manager", self.provider_manager)
+
         self.tool_executor = ToolExecutor(config, self.tool_registry)
         logger.info(f"Tool registry initialized with {len(self.tool_registry)} tools.")
 
@@ -507,6 +550,17 @@ class JarvisEngine:
         self.connector_manager = ConnectorManager(config, self)
         await self.connector_manager.start_all()
         logger.info("Connector manager initialized.")
+
+    async def _init_automation(self, config: JarvisConfig) -> None:
+        """Initialize PC Control and Desktop Automation subsystem."""
+        if not config or not hasattr(config, "automation") or not config.automation.enabled:
+            self.automation_engine = None
+            return
+
+        from jarvis.automation.engine import AutomationEngine
+        self.automation_engine = AutomationEngine(config)
+        await self.automation_engine.initialize(config, self.provider_manager)
+        logger.info("Automation engine initialized.")
 
     def _build_messages_from_history(
         self,

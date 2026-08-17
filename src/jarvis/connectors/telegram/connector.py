@@ -379,14 +379,15 @@ class TelegramConnector(BaseConnector):
                 chunks.append(chunk)
                 stream_buffer += chunk
 
-                if not is_thinking and "<think>" in stream_buffer:
+                if not is_thinking and re.search(r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>", stream_buffer, re.IGNORECASE):
                     is_thinking = True
                     await update_status("💭 <b>Thinking...</b>")
 
-                if is_thinking and "</think>" in stream_buffer:
-                    is_thinking = False
-                    idx = stream_buffer.find("</think>")
-                    stream_buffer = stream_buffer[idx + len("</think>"):]
+                if is_thinking:
+                    close_match = re.search(r"</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>", stream_buffer, re.IGNORECASE)
+                    if close_match:
+                        is_thinking = False
+                        stream_buffer = stream_buffer[close_match.end():]
 
             final_response = "".join(chunks).strip()
             if not final_response:

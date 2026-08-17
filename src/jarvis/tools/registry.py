@@ -43,7 +43,7 @@ class ToolRegistry:
 
     def discover_tools(self) -> None:
         """Auto-discover and register all tools from subdirectories."""
-        categories = ["basic", "filesystem", "system", "code"]
+        categories = ["basic", "filesystem", "system", "code", "desktop"]
 
         for category in categories:
             # Check if category is enabled

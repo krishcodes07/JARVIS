@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, QTimer
@@ -54,20 +55,51 @@ class ConversationView(QScrollArea):
             """
         )
 
+    def _clear_layout(self, layout) -> None:
+        if layout is None:
+            return
+        while layout.count():
+            item = layout.takeAt(0)
+            if item is None:
+                continue
+            w = item.widget()
+            l = item.layout()
+            if w is not None:
+                w.deleteLater()
+            elif l is not None:
+                self._clear_layout(l)
+
     def clear_messages(self) -> None:
         self.hide_pending()
         while self.layout_box.count() > 1:
-            child = self.layout_box.takeAt(0)
-            if child.widget():
-                child.widget().deleteLater()
+            item = self.layout_box.takeAt(0)
+            if item is None:
+                continue
+            w = item.widget()
+            l = item.layout()
+            if w is not None:
+                w.deleteLater()
+            elif l is not None:
+                self._clear_layout(l)
 
     def add_message(self, role: str, content: str) -> None:
         self.hide_pending()
 
+        display_text = content
+        if role != "user":
+            cleaned = re.sub(
+                r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>(.*?)(?:</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>|$)",
+                "",
+                content,
+                flags=re.DOTALL | re.IGNORECASE,
+            ).strip()
+            if cleaned:
+                display_text = cleaned
+
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 0)
 
-        bubble = QLabel(content)
+        bubble = QLabel(display_text)
         bubble.setWordWrap(True)
         bubble.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         font = bubble.font()
@@ -148,6 +180,7 @@ class ConversationView(QScrollArea):
 
     def hide_pending(self) -> None:
         if self.pending_widget is not None:
+            self.layout_box.removeWidget(self.pending_widget)
             self.pending_widget.deleteLater()
             self.pending_widget = None
 

@@ -66,6 +66,26 @@ tools:
     filesystem: true
     system: true
     code: true
+    desktop: true
+automation:
+  enabled: true
+  grounding_mode: uia
+  max_steps: 30
+  step_delay: 0.5
+  emergency_hotkey: ctrl+alt+q
+  failsafe: true
+  human_mouse_speed: true
+  mouse_speed_seconds: 0.3
+  screenshot_downscale: 1.0
+  protected_apps:
+    - 1password
+    - bitwarden
+    - keepass
+    - lastpass
+    - authenticator
+    - windows security
+  require_confirmation_for_sensitive: true
+  log_screenshots: true
 skills:
   enabled: true
   skills_dir: src/jarvis/skills

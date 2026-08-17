@@ -8,6 +8,7 @@ an OpenAI-compatible API (which is the vast majority of LLM providers).
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -236,7 +237,7 @@ class OpenAIProvider(BaseProvider):
         message = choice["message"]
         content = message.get("content", "") or ""
         reasoning = message.get("reasoning_content") or message.get("reasoning")
-        if reasoning and "<think>" not in content:
+        if reasoning and not re.search(r"<(?:think|thought|reasoning)", content, re.IGNORECASE):
             content = f"<think>\n{reasoning}\n</think>\n{content}"
 
         return GenerationResponse(
