@@ -163,22 +163,117 @@ python -m jarvis --connector all
 
 ---
 
-## Supported Providers & Capabilities
+## LLM Provider Architecture & Ecosystem
 
-| Provider | Protocol | Default Model | Vision | Tools | Streaming | Recommended Env Key |
-| --- | --- | --- | :---: | :---: | :---: | --- |
-| **OpenAI** | `openai` | `gpt-4o` | ✅ | ✅ | ✅ | `OPENAI_API_KEY` |
-| **Anthropic** | `anthropic` | `claude-sonnet-4-20250514` | ✅ | ✅ | ✅ | `ANTHROPIC_API_KEY` |
-| **Google Gemini** | `google` | `gemini-2.5-flash` | ✅ | ✅ | ✅ | `GOOGLE_API_KEY` |
-| **Groq** | `openai` | `llama-3.3-70b-versatile` | ❌ | ✅ | ✅ | `GROQ_API_KEY` |
-| **NVIDIA NIM** | `openai` | `meta/llama-3.1-405b-instruct` | ❌ | ✅ | ✅ | `NVIDIA_API_KEY` |
-| **OpenRouter** | `openai` | `anthropic/claude-sonnet-4` | ✅ | ✅ | ✅ | `OPENROUTER_API_KEY` |
-| **Mistral AI** | `openai` | `mistral-large-latest` | ✅ | ✅ | ✅ | `MISTRAL_API_KEY` |
-| **OpenCode Zen** | `openai` | `deepseek-v4-flash-free` | ❌ | ✅ | ✅ | `OPENCODE_ZEN_API_KEY` |
-| **TokenRouter** | `openai` | `moonshotai/kimi-k3-free` | ❌ | ✅ | ✅ | `TOKENROUTER_API_KEY` |
+JARVIS features an enterprise-grade, multi-provider LLM routing architecture powered by the dynamic **[`models.dev`](https://models.dev)** catalog. With support for **180+ cloud and local LLM providers** and thousands of models, JARVIS offers universal model compatibility, native tool calling, streaming reasoning extraction, and automated fault-tolerant fallback.
+
+### Universal Protocol Coverage
+
+Instead of hardcoding a limited list of providers, JARVIS dynamically queries the **[`models.dev`](https://models.dev)** catalog—giving you immediate access to **180+ providers** and thousands of models. Every provider in the catalog automatically maps to one of JARVIS's three unified protocol engines:
+
+| Protocol Engine | Ecosystem & Coverage (180+ Providers) | Tool Calling | Streaming | Reasoning Extraction (`<think>`) | Embeddings |
+| --- | --- | :---: | :---: | :---: | :---: |
+| **OpenAI-Compatible (`openai`)** | **170+ Providers** (OpenAI, Groq, DeepSeek, NVIDIA NIM, OpenRouter, Mistral, Together AI, xAI, Cerebras, OpenCode Zen, TokenRouter, Ollama, vLLM, LM Studio, etc.) | ✅ Native | ✅ SSE | ✅ (`reasoning_content` / `reasoning`) | ✅ `/embeddings` |
+| **Anthropic (`anthropic`)** | Anthropic Claude APIs (Claude 3.5 / 3.7 Sonnet, Claude Opus 4, Claude Haiku, etc.) | ✅ Native | ✅ SSE | ✅ (`thinking` blocks) | ❌ |
+| **Google Gemini (`google`)** | Google Generative AI & Vertex AI (Gemini 2.5 Pro / Flash, Gemini 2.0 Flash Thinking, etc.) | ✅ Native | ✅ SSE | ✅ (`thought: true` parts) | ✅ `/models:embedContent` |
 
 > [!TIP]
-> To add a new OpenAI-compatible provider, simply add an entry to `config/providers.json` — zero code changes required!
+> **Zero-Code Provider Addition**: Because JARVIS fetches provider definitions and models dynamically from `models.dev`, you can use any of the 180+ providers simply by setting its respective API key in your `.env` file or via the in-app connector (`Ctrl+A`). Custom and local endpoints (like Ollama or vLLM) can also be added via `config/providers.json` with zero Python code changes!
+
+---
+
+### Core Protocol Implementations
+
+JARVIS implements three specialized protocol drivers that normalize requests, responses, streaming chunks, tool calling, and embeddings across all providers:
+
+#### 1. OpenAI-Compatible Protocol (`OpenAIProvider`)
+- **Universal Compatibility**: Serves as the universal bridge for OpenAI, Groq, NVIDIA NIM, OpenRouter, DeepSeek, Together AI, Mistral, xAI, Cerebras, OpenCode, TokenRouter, Ollama, LM Studio, and vLLM.
+- **Reasoning Token Parsing**: Captures and converts provider reasoning fields (`reasoning_content` or `reasoning`) into standardized `<think>...</think>` XML blocks during both streaming and non-streaming responses.
+- **Native Function Calling**: Translates Pydantic tool definitions into OpenAI function call schemas and normalizes `tool_calls` payloads.
+- **Embeddings Support**: Direct integration with `/embeddings` endpoints (with automatic `input_type="passage"` injection for NVIDIA NIM models).
+
+#### 2. Anthropic Protocol (`AnthropicProvider`)
+- **Messages API**: Implements native Anthropic Messages API (`/v1/messages`) specification.
+- **System Prompt Isolation**: Automatically separates system instructions into top-level `system` parameters as required by Anthropic.
+- **Extended Thinking Blocks**: Accumulates `thinking_delta` and `content_block` stream chunks into formatted reasoning blocks.
+- **Streaming Tool Accumulation**: Parses incremental `input_json_delta` chunks and reconstitutes valid tool invocation arguments.
+
+#### 3. Google Gemini Protocol (`GoogleProvider`)
+- **Generative AI REST API**: Direct integration with `/models/{model}:generateContent` and `/models/{model}:streamGenerateContent`.
+- **Strict Schema Proto Sanitizer (`_clean_schema`)**: Automatically transforms arbitrary JSON Schemas and OpenAPI definitions into Google's strict Schema proto by removing unsupported fields (`additionalProperties`, `$schema`, `title`, `default`), normalizing `anyOf`/`oneOf` nullable types, and converting data types to uppercase (`OBJECT`, `ARRAY`, `STRING`, etc.) to prevent `400 Bad Request` API errors.
+- **Flash Thinking Support**: Real-time extraction of Gemini 2.0 / 2.5 thinking tokens (`thought: true`) into `<think>` blocks.
+- **Thought Signature Preservation**: Round-trips Gemini thought signatures (`thought_signature` / `thoughtSignature`) to ensure continuous function-calling reasoning chains.
+- **Multi-Tool Turn Merging**: Merges multiple simultaneous tool execution outputs into a single turn with `functionResponse` parts.
+
+---
+
+### Key Architectural Capabilities
+
+#### 🔄 Dynamic models.dev Catalog & Local Caching
+JARVIS fetches and caches metadata for **180+ providers** and their full model rosters from [`https://models.dev/api.json`](https://models.dev/api.json). The catalog is stored locally in `~/.jarvis/workspace/cache/models_dev_cache.json` (with repository fallback in `data/models_dev_cache.json`), enabling offline boot, context limit detection, and credential field validation without manual configuration.
+
+#### ⚡ Connected Provider Auto-Discovery & Smart Boot
+At startup, JARVIS checks environment variables and `.env` files across both the repository root and `~/.jarvis/.env`. If the configured default provider does not have an active API key, JARVIS **automatically falls back to the first available connected provider**, ensuring zero-downtime startup.
+
+#### 🔀 Seamless Runtime Provider & Model Switching
+Switch providers and models on the fly with zero restarts:
+- **Terminal UI Modal (`Ctrl+M`)**: Open the interactive Model Picker to search providers, inspect context window limits, and switch instantly.
+- **API Key Connector Modal (`Ctrl+A`)**: Input and connect API keys directly in the TUI with automatic persistence to `~/.jarvis/.env`.
+- **In-Chat Slash Commands**: Use `/models` in the TUI, Telegram, or Discord:
+  ```bash
+  /models switch groq llama-3.3-70b-versatile
+  /models switch google gemini-2.5-flash
+  /models switch anthropic claude-sonnet-4-20250514
+  ```
+
+#### 🛡️ Automated Fault-Tolerant Fallback
+If your primary provider encounters rate limits, downtime, or network outages, the `ProviderManager` automatically executes a failover to the configured fallback provider and model (e.g. OpenRouter or Google Gemini) for both standard generation and real-time streaming, labeling the turn with `(fallback)` diagnostics.
+
+#### 🧠 Universal Thinking & Reasoning Pipeline
+Reasoning models (DeepSeek R1/V3, Claude 3.7 Sonnet, Gemini 2.5 Flash Thinking, OpenAI o-series) are unified under a standardized `<think>...</think>` display stream. Toggle reasoning visibility on/off in the TUI at any time using `Ctrl+T` or `/debug`.
+
+---
+
+### Configuration & Custom Providers
+
+#### 1. Provider Configuration (`jarvis.yaml`)
+
+Configure your default and fallback LLM providers in `~/.jarvis/config/jarvis.yaml` (or `config/jarvis.yaml`):
+
+```yaml
+provider:
+  active: "groq"                                # Active provider identifier
+  model: "llama-3.3-70b-versatile"              # Model ID
+  temperature: 0.7
+  max_tokens: 4096
+  top_p: 1.0
+  thinking: true                                # Enable reasoning/thinking tokens
+  fallback:
+    enabled: true
+    provider: "openrouter"                      # Backup provider on primary failure
+    model: "anthropic/claude-sonnet-4"          # Backup model ID
+```
+
+#### 2. Adding Custom / Local Providers (e.g., Ollama, vLLM, LM Studio)
+
+Any OpenAI-compatible service can be registered by adding an entry to `config/providers.json` (or `~/.jarvis/config/providers.json`):
+
+```json
+{
+  "name": "ollama",
+  "display_name": "Ollama (Local)",
+  "protocol": "openai",
+  "base_url": "http://localhost:11434/v1",
+  "api_key_env": "OLLAMA_API_KEY",
+  "default_model": "llama3.2:latest",
+  "supports": ["text", "streaming", "tools"]
+}
+```
+
+Then specify the provider in your config or `.env`:
+```env
+OLLAMA_API_KEY=ollama
+```
 
 ---
 

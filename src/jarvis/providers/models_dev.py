@@ -2,7 +2,7 @@
 models.dev Integration — Loads, caches, and manages LLM provider metadata from models.dev database.
 
 Fetches 180+ providers and their model catalogs from https://models.dev/api.json and caches
-them locally in data/models_dev_cache.json.
+them locally in ~/.jarvis/workspace/cache/models_dev_cache.json.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from jarvis.core.constants import Protocol
 
 logger = logging.getLogger(__name__)
 
-MODELS_DEV_CACHE_FILE = DATA_DIR / "models_dev_cache.json"
+MODELS_DEV_CACHE_FILE = DATA_DIR / "cache" / "models_dev_cache.json"
 MODELS_DEV_URL = "https://models.dev/api.json"
 
 # Known default base URLs for standard providers when api field is null in models.dev
@@ -52,7 +52,19 @@ def load_models_dev_cache() -> dict[str, Any]:
                 if isinstance(data, dict) and data:
                     return data
         except Exception as e:
-            logger.warning(f"Failed loading models.dev cache: {e}")
+            logger.warning(f"Failed loading models.dev cache from {MODELS_DEV_CACHE_FILE}: {e}")
+
+    # Check legacy user workspace location (~/.jarvis/workspace/models_dev_cache.json)
+    legacy_user_cache = DATA_DIR / "models_dev_cache.json"
+    if legacy_user_cache.exists():
+        try:
+            with open(legacy_user_cache, encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data:
+                    save_models_dev_cache(data)
+                    return data
+        except Exception as e:
+            logger.warning(f"Failed loading legacy models.dev cache from {legacy_user_cache}: {e}")
 
     # Fallback to repo data catalog file
     repo_cache = PROJECT_ROOT / "data" / "models_dev_cache.json"
@@ -64,13 +76,13 @@ def load_models_dev_cache() -> dict[str, Any]:
                     save_models_dev_cache(data)
                     return data
         except Exception as e:
-            logger.warning(f"Failed loading fallback models.dev cache: {e}")
+            logger.warning(f"Failed loading fallback models.dev cache from {repo_cache}: {e}")
 
     return {}
 
 
 def save_models_dev_cache(data: dict[str, Any]) -> None:
-    """Save models.dev data to local cache file."""
+    """Save models.dev data to local cache file in ~/.jarvis/workspace/cache/models_dev_cache.json."""
     try:
         MODELS_DEV_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(MODELS_DEV_CACHE_FILE, "w", encoding="utf-8") as f:

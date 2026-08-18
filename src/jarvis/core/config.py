@@ -98,11 +98,22 @@ def ensure_jarvis_home() -> Path:
             except Exception as e:
                 logger.warning(f"Failed to copy env template to {user_env_file}: {e}")
 
-    # Copy models_dev_cache.json from PROJECT_ROOT/data if missing in user workspace
+    # Copy models_dev_cache.json from PROJECT_ROOT/data if missing in user workspace cache
     repo_cache_file = PROJECT_ROOT / "data" / "models_dev_cache.json"
-    user_cache_file = workspace_dir / "models_dev_cache.json"
+    user_cache_file = workspace_dir / "cache" / "models_dev_cache.json"
+    legacy_user_cache_file = workspace_dir / "models_dev_cache.json"
+
+    # Migrate from legacy workspace root to workspace/cache if present
+    if legacy_user_cache_file.exists() and not user_cache_file.exists():
+        try:
+            shutil.move(str(legacy_user_cache_file), str(user_cache_file))
+            logger.info(f"Migrated models_dev_cache.json to {user_cache_file}.")
+        except Exception as e:
+            logger.warning(f"Failed to migrate legacy models_dev_cache.json to {user_cache_file}: {e}")
+
     if repo_cache_file.exists() and not user_cache_file.exists():
         try:
+            user_cache_file.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(repo_cache_file, user_cache_file)
             logger.info(f"Initialized models_dev_cache.json in {user_cache_file} from repository data.")
         except Exception as e:

@@ -209,7 +209,7 @@ class DesktopController:
             except Exception:
                 return []
 
-        target = str(query).strip().lower()
+        target = query.strip().lower()
         if not target:
             return []
 
