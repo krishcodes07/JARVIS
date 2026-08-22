@@ -45,8 +45,8 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 - **Git-Checkpoint Revert & Message Actions** — Click any conversation message to copy prompt/response, re-run turns, or revert both conversation state and workspace file modifications back to that exact checkpoint.
 - **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, keyboard shortcuts (`Ctrl+M` model picker, `Ctrl+S` sessions, `Ctrl+P` command palette, `Alt+V` voice mode), theme selector (`/theme`), and live context usage meters.
 - **Multi-Platform Messaging Connectors** — Bi-directional bot bridges for **Telegram** and **Discord** with user/channel allowlists, bot commands (`/session`, `/new`, `/clear`, `/status`, `/help`), and standalone background service modes.
-- **Specialized Skills Framework** — Modular skill packs for autonomous bug hunting, code review, fullstack coding, data analysis, deep research, and system architecture.
-- **Native MCP Ecosystem & Creation** — Seamlessly integrate Gmail, Calendar, Excel, Telegram, Filesystem, Terminal, Firecrawl, and Vercel — or let JARVIS generate custom MCP servers dynamically.
+- **Specialized Skills Framework** — Modular skill packs for autonomous bug hunting, code review, fullstack coding, data analysis, deep research, frontend design, MCP discovery (`find-mcp`), and system architecture.
+- **Dynamic MCP Marketplace & Server Creation** — Discover and install community MCP servers on the fly from [mcpmarket.com](https://mcpmarket.com/), npm, and GitHub, or have JARVIS generate and register custom MCP servers dynamically.
 - **Integrated Voice Suite** — Natural speech-to-text (STT) input and real-time streaming text-to-speech (TTS) output with hands-free conversation mode.
 
 
@@ -79,7 +79,7 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 - **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fault-tolerant fallback routing.
 - **Offline & Multi-Backend Vector Memory** — ChromaDB vector memory with bundled ONNX `all-MiniLM-L6-v2` offline embeddings (zero API key needed) and automatic remote-to-local fallback.
 - **Dynamic MCP Creator & Registry** — In-chat MCP tool generation and runtime server registration (`~/.jarvis/mcp/servers.json`) for npm, uvx, and python MCP servers.
-- **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, `frontend-design`, `create-mcp`, and `system-architecture`.
+- **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, `find-mcp`, `frontend-design`, and `system-architecture`.
 - **Enhanced Voice Suite** — Streaming Edge TTS / ElevenLabs with automatic `<think>` tag stripping, multi-paragraph chunking, and configurable character limits (`max_speak_characters`).
 - **Fully Configurable & User-Isolated** — Runtime configurations saved in `~/.jarvis/config/jarvis.yaml`, tokens in `~/.jarvis/auth/tokens.json`, and API keys in `~/.jarvis/.env`.
 
@@ -121,19 +121,6 @@ The wizard will:
 3. Test or download the offline local embedding model.
 4. Save your configuration to `~/.jarvis/config/jarvis.yaml` and `~/.jarvis/.env`.
 
-### Connecting Accounts & Services (OAuth & Telegram)
-
-Authenticate personal accounts with zero manual token copying:
-
-```bash
-# Connect Google Account (Gmail & Google Calendar) via browser OAuth 2.0
-python main.py --connect gmail
-python main.py --connect calendar
-
-# Connect Personal Telegram Account (MTProto User API)
-python main.py --connect telegram
-```
-
 ### Optional Installation Extras
 
 Select extra dependency packages depending on your needs:
@@ -145,14 +132,11 @@ pip install -e ".[automation]"
 # Install Voice dependencies (Edge TTS, ElevenLabs, SpeechRecognition, faster-whisper)
 pip install -e ".[voice]"
 
-# Install MCP server extras (openpyxl for Excel, telethon for Telegram)
-pip install -e ".[mcp]"
-
 # Install Developer & Testing tools (pytest, ruff, mypy)
 pip install -e ".[dev]"
 
 # Install ALL features at once
-pip install -e ".[automation,voice,mcp,dev]"
+pip install -e ".[automation,voice,dev]"
 ```
 
 ---
@@ -311,9 +295,9 @@ OLLAMA_API_KEY=ollama
 
 JARVIS includes out-of-the-box tools categorized by safety levels:
 
-- **Desktop Control Tools**: `app_control`, `browser_control`, `window_control`, `media_control`, `system_settings`, `input_simulation`, `automate_task`
-- **Basic Tools**: `calculator`, `clipboard`, `datetime_tool`, `screenshot`, `url_reader`
-- **Filesystem Tools**: `read_file`, `write_file`, `edit_file`, `append_file`, `list_directory`, `make_directory`, `delete_file`, `copy_file`, `move_file`, `search_files`, `grep_search`, `get_file_info`
+- **Desktop Control Tools**: `app_control`, `automate_task`, `browser_control`, `input_simulation`, `media_control`, `system_settings`, `window_control`
+- **Basic Tools**: `calculator`, `clipboard`, `datetime_tool`, `get_schema`, `get_skill`, `list_skills`, `list_tools`, `mcp_creator`, `mcp_finder`, `read_url`, `screenshot`, `web_search`
+- **Filesystem Tools**: `append_file`, `copy_file`, `delete_file`, `edit_file`, `get_file_info`, `grep_search`, `list_directory`, `make_directory`, `move_file`, `read_file`, `search_files`, `write_file`
 - **System Tools**: `process_manager`, `run_command`, `system_info`
 
 ### Permissions & Sandboxing
@@ -377,6 +361,8 @@ JARVIS includes pluggable, specialized skill engines located under `src/jarvis/s
 - 💻 **`coding`** — Full-stack implementation, architecture scaffolding, refactoring, and clean code generation.
 - 📊 **`data-analysis`** — Exploratory data analysis, statistical breakdowns, and data visualization planning.
 - 🔬 **`deep-research`** — Recursive multi-source investigation, source synthesis, and executive briefing reports.
+- 🔌 **`find-mcp`** — Autonomously discover, evaluate, and install community MCP servers from registries ([mcpmarket.com](https://mcpmarket.com/), NPM, GitHub).
+- 🎨 **`frontend-design`** — Modern UI/UX architecture, responsive component design, and styling best practices.
 - 🏛️ **`system-architecture`** — High-level distributed system design, API contracts, and scalability modeling.
 
 ---
