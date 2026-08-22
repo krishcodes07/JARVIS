@@ -40,12 +40,15 @@
 Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 180+ LLM providers via `models.dev` integration, interact via rich terminal TUI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
 
 - **180+ LLM Provider Catalog (`models.dev`)** — Direct integration with 180+ LLM providers (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.) with automatic fallback streaming routing.
-- **Full PC Control & Autonomous Desktop Automation** — End-to-end multi-step OS control (`/automate`), Windows UI Automation (UIA) tree inspection, dynamic application discovery, smooth mouse/keyboard simulation, and global emergency abort safety (`Ctrl+Alt+Q`).
-- **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, keyboard shortcuts (`Ctrl+M` model picker, `Ctrl+A` API key modal), and voice toggle.
+- **Full PC Control & Autonomous Desktop Automation** — End-to-end multi-step OS control, Windows UI Automation (UIA) tree inspection, dynamic application discovery, smooth mouse/keyboard simulation, and global emergency abort safety (`Ctrl+Alt+Q`).
+- **Dynamic Reasoning Effort Control (`/effort`)** — Full `models.dev` catalog reasoning awareness. Configure reasoning effort (`low`, `medium`, `high`, `none`), disable thinking on configurable models while keeping inherent reasoning models running normally, with live footer badges and collapsible thought blocks.
+- **Git-Checkpoint Revert & Message Actions** — Click any conversation message to copy prompt/response, re-run turns, or revert both conversation state and workspace file modifications back to that exact checkpoint.
+- **Rich Terminal UI (TUI)** — Interactive Textual-powered terminal application with streaming markdown, syntax highlighting, keyboard shortcuts (`Ctrl+M` model picker, `Ctrl+S` sessions, `Ctrl+P` command palette, `Alt+V` voice mode), theme selector (`/theme`), and live context usage meters.
 - **Multi-Platform Messaging Connectors** — Bi-directional bot bridges for **Telegram** and **Discord** with user/channel allowlists, bot commands (`/session`, `/new`, `/clear`, `/status`, `/help`), and standalone background service modes.
 - **Specialized Skills Framework** — Modular skill packs for autonomous bug hunting, code review, fullstack coding, data analysis, deep research, and system architecture.
 - **Native MCP Ecosystem & Creation** — Seamlessly integrate Gmail, Calendar, Excel, Telegram, Filesystem, Terminal, Firecrawl, and Vercel — or let JARVIS generate custom MCP servers dynamically.
 - **Integrated Voice Suite** — Natural speech-to-text (STT) input and real-time streaming text-to-speech (TTS) output with hands-free conversation mode.
+
 
 ---
 
@@ -68,17 +71,18 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 
 ## Features
 
-- **Interactive First-Time Setup Wizard** — Interactive onboarding CLI (`python setup.py` or `jarvis --setup`) with live API key testing, model validation, and offline embedding initialization.
-- **OAuth 2.0 Loopback & Personal Service Auth** — Native browser OAuth 2.0 flow for Google (Gmail & Google Calendar) and Telethon MTProto authentication for personal Telegram accounts via `jarvis --connect <service>`.
-- **Autonomous PC Control & Desktop Automation** — Execute multi-step desktop workflows (`/automate <goal>`), launch & control apps, browse websites, manage window layouts (snapping, maximizing), adjust system audio volume, and simulate mouse/keyboard with emergency abort failsafes (`Ctrl+Alt+Q`).
-- **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), API key connector (`Ctrl+A`), MCP manager modal (`Ctrl+P` or `/mcp`), and voice controls.
+- **Interactive First-Time Setup Wizard** — Interactive onboarding CLI (`python setup.py` or `python -m jarvis --setup`) with live API key testing, model validation, and offline embedding initialization.
+- **OAuth 2.0 Loopback & Personal Service Auth** — Native browser OAuth 2.0 flow for Google (Gmail & Google Calendar) and Telethon MTProto authentication for personal Telegram accounts via `python main.py --connect <service>`.
+- **Autonomous PC Control & Desktop Automation** — Multi-step desktop control via native tools (`app_control`, `window_control`, `browser_control`, `input_simulation`), launch & control apps, browse websites, manage window layouts, and simulate mouse/keyboard with emergency abort failsafes (`Ctrl+Alt+Q`).
+- **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), provider connector (`/connect`), sessions manager (`Ctrl+S`), reasoning effort selector (`/effort`), MCP manager modal (`Ctrl+P` or `/mcp`), theme customizer (`/theme`), and voice controls (`Alt+V`).
 - **Dynamic Messaging Connectors (Telegram & Discord)** — Auto-discovered messaging bridges from `jarvis/connectors` and `~/.jarvis/connectors/` with channel/user allowlists, message chunking, typing indicators, and session persistence.
 - **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fault-tolerant fallback routing.
 - **Offline & Multi-Backend Vector Memory** — ChromaDB vector memory with bundled ONNX `all-MiniLM-L6-v2` offline embeddings (zero API key needed) and automatic remote-to-local fallback.
-- **Dynamic MCP Creator & Registry** — In-chat MCP tool generation and runtime server registration (`~/.jarvis/mcp/servers.json`) for npms, uvx, and python MCP servers.
+- **Dynamic MCP Creator & Registry** — In-chat MCP tool generation and runtime server registration (`~/.jarvis/mcp/servers.json`) for npm, uvx, and python MCP servers.
 - **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, `frontend-design`, `create-mcp`, and `system-architecture`.
 - **Enhanced Voice Suite** — Streaming Edge TTS / ElevenLabs with automatic `<think>` tag stripping, multi-paragraph chunking, and configurable character limits (`max_speak_characters`).
 - **Fully Configurable & User-Isolated** — Runtime configurations saved in `~/.jarvis/config/jarvis.yaml`, tokens in `~/.jarvis/auth/tokens.json`, and API keys in `~/.jarvis/.env`.
+
 
 ---
 
@@ -254,7 +258,7 @@ Switch providers and models on the fly with zero restarts:
 If your primary provider encounters rate limits, downtime, or network outages, the `ProviderManager` automatically executes a failover to the configured fallback provider and model (e.g. OpenRouter or Google Gemini) for both standard generation and real-time streaming, labeling the turn with `(fallback)` diagnostics.
 
 #### 🧠 Universal Thinking & Reasoning Pipeline
-Reasoning models (DeepSeek R1/V3, Claude 3.7 Sonnet, Gemini 2.5 Flash Thinking, OpenAI o-series) are unified under a standardized `<think>...</think>` display stream. Toggle reasoning visibility on/off in the TUI at any time using `Ctrl+T` or `/debug`.
+Reasoning models (DeepSeek R1/V3/Reasoner, Claude 3.7 Sonnet, Gemini 2.5 Flash Thinking, OpenAI o-series, StepFun, etc.) are unified under an interactive collapsible `<think>...</think>` display stream. Toggle thinking on/off in `jarvis.yaml` (`thinking: false` disables reasoning options on configurable models while letting inherent only-thinking models run normally), or customize the active reasoning effort level dynamically using the `/effort` slash command or effort modal dialog.
 
 ---
 
@@ -272,11 +276,13 @@ provider:
   max_tokens: 4096
   top_p: 1.0
   thinking: true                                # Enable reasoning/thinking tokens
+  reasoning_effort: "high"                      # Reasoning effort level (none, low, medium, high, max)
   fallback:
     enabled: true
     provider: "openrouter"                      # Backup provider on primary failure
     model: "anthropic/claude-sonnet-4"          # Backup model ID
 ```
+
 
 #### 2. Adding Custom / Local Providers (e.g., Ollama, vLLM, LM Studio)
 
@@ -399,6 +405,21 @@ JARVIS TUI supports rich interactive slash commands:
 - `/debug` — Inspect system status, provider metrics, and event diagnostics.
 - `/help` — Display commands overview and keybindings.
 - `/exit` / `/quit` — Exit the application.
+
+### Keyboard Shortcuts
+
+| Shortcut | Description |
+| --- | --- |
+| `Ctrl+N` | Start a new conversation session |
+| `Ctrl+P` / `/` | Open Slash Command Palette |
+| `Ctrl+M` | Open Model Selection Modal |
+| `Ctrl+S` | Open Sessions Modal |
+| `Ctrl+A` | Connect Provider API Key (inside Model Modal) |
+| `Alt+V` | Toggle Hands-Free Voice Mode (STT & TTS) |
+| `Up` / `Down` | Navigate prompt input history |
+| `Esc` | Cancel streaming generation or close active modal |
+| `Ctrl+Alt+Q` | Emergency Abort desktop automation failsafe |
+
 
 
 ---

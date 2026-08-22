@@ -5,7 +5,7 @@ Thank you for your interest in contributing to JARVIS! This guide will help you 
 ## Getting Started
 
 1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/JARVIS.git`
+2. **Clone** your fork: `git clone https://github.com/krishcodes07/JARVIS.git`
 3. **Create a branch**: `git checkout -b feature/your-feature-name`
 4. **Install dependencies**: `pip install -e ".[dev]"`
 5. **Make your changes**
