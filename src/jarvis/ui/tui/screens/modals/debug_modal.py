@@ -126,12 +126,16 @@ class DebugModal(ModalScreen[None]):
         if c:
             self._add_row(txt, "Active Provider", c.provider.active.upper(), "#3b82f6")
             self._add_row(txt, "Active Model", c.provider.model, "#60a5fa")
+            self._add_row(txt, "Thinking Enabled", "Yes" if c.provider.thinking else "No", "#22c55e" if c.provider.thinking else "#ef4444")
+            if c.provider.reasoning_effort:
+                self._add_row(txt, "Reasoning Effort", c.provider.reasoning_effort, "#a78bfa")
             last_used = getattr(self.engine.provider_manager, "last_used_model", None) if hasattr(self.engine, "provider_manager") else None
             if last_used:
                 self._add_row(txt, "Last Response Model", last_used, "#f59e0b")
             fb = c.provider.fallback
             if fb.enabled:
                 self._add_row(txt, "Fallback Target", f"{fb.provider} ({fb.model})", "#f97316")
+
 
         # ── Tools & MCP ──
         txt.append("\nTools & MCP Status\n", style="bold #60a5fa")

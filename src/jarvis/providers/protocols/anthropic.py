@@ -239,7 +239,34 @@ class AnthropicProvider(BaseProvider):
                 for tool in config.tools
             ]
 
+        # Handle Anthropic extended thinking based on models.dev and config.thinking
+        from jarvis.providers.models_dev import (
+            get_model_info,
+            has_configurable_reasoning,
+        )
+
+        model_info = get_model_info(config.model, config.provider_id or "anthropic")
+
+        if config.thinking is True and config.reasoning_effort != "none":
+            if has_configurable_reasoning(config.model, config.provider_id or "anthropic", model_info):
+
+                budget = config.thinking_budget or 2048
+                # Anthropic API requires max_tokens > budget_tokens
+                if payload["max_tokens"] <= budget:
+                    payload["max_tokens"] = budget + 1024
+                # Anthropic requires temperature to be 1.0 (or omitted) and top_p omitted when thinking is enabled
+                payload.pop("temperature", None)
+                payload.pop("top_p", None)
+                payload["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": budget,
+                }
+        elif config.thinking is False:
+            # When thinking is disabled, do not include thinking parameter if configurable
+            pass
+
         return payload
+
 
     def _format_message(self, message: Message) -> dict[str, Any]:
         """Format a message for the Anthropic API."""

@@ -143,6 +143,8 @@ class ProviderConfig(BaseModel):
     max_tokens: int = 4096
     top_p: float = 1.0
     thinking: bool = True
+    reasoning_effort: str | None = None
+    thinking_budget: int | None = None
     fallback: FallbackConfig = Field(default_factory=FallbackConfig)
 
 

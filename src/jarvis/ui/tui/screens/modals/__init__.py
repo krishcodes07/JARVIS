@@ -9,6 +9,7 @@ from jarvis.ui.tui.screens.modals.config_modal import ConfigModal
 from jarvis.ui.tui.screens.modals.confirm_modal import ConfirmModal
 from jarvis.ui.tui.screens.modals.connect_modal import ConnectModal
 from jarvis.ui.tui.screens.modals.debug_modal import DebugModal
+from jarvis.ui.tui.screens.modals.effort_modal import EffortModal
 from jarvis.ui.tui.screens.modals.help_modal import HelpModal
 from jarvis.ui.tui.screens.modals.mcp_modal import MCPModal
 from jarvis.ui.tui.screens.modals.message_actions_modal import MessageActionsModal
@@ -24,6 +25,7 @@ __all__ = [
     "ConfirmModal",
     "ConnectModal",
     "DebugModal",
+    "EffortModal",
     "HelpModal",
     "MCPModal",
     "MessageActionsModal",
@@ -31,3 +33,4 @@ __all__ = [
     "SessionModal",
     "ThemeModal",
 ]
+

@@ -366,9 +366,14 @@ class PromptBoxWidget(Widget):
         txt.append(f"{self.model}", style="bold #ffffff")
         txt.append(" · ", style="dim #737373")
         txt.append(f"{self.provider}", style="dim #a3a3a3")
+        if self.reasoning and self.reasoning != "off":
+            txt.append(" · ", style="dim #737373")
+            txt.append(f"{self.reasoning}", style="dim #a3a3a3")
 
         if self.is_mounted:
             self.badge_widget.update(txt)
+
+
 
     def update_hints(self) -> None:
         txt = Text()

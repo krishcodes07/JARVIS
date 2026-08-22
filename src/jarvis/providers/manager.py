@@ -132,7 +132,13 @@ class ProviderManager:
                 temperature=self.config.provider.temperature,
                 max_tokens=self.config.provider.max_tokens,
                 top_p=self.config.provider.top_p,
+                thinking=self.config.provider.thinking,
+                reasoning_effort=self.config.provider.reasoning_effort,
+                thinking_budget=self.config.provider.thinking_budget,
+                provider_id=self._active_name,
             )
+        elif not config.provider_id:
+            config.provider_id = self._active_name
 
         self._last_used_model = config.model
 
@@ -159,9 +165,16 @@ class ProviderManager:
                 temperature=self.config.provider.temperature,
                 max_tokens=self.config.provider.max_tokens,
                 top_p=self.config.provider.top_p,
+                thinking=self.config.provider.thinking,
+                reasoning_effort=self.config.provider.reasoning_effort,
+                thinking_budget=self.config.provider.thinking_budget,
+                provider_id=self._active_name,
             )
+        elif not config.provider_id:
+            config.provider_id = self._active_name
 
         self._last_used_model = config.model
+
 
         has_yielded = False
         try:

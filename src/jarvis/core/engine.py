@@ -148,11 +148,15 @@ class JarvisEngine:
         all_raw_defs = await self._get_all_raw_tool_definitions()
 
         # 3. Build system prompt & context
-        thinking_enabled = (
+        from jarvis.providers.models_dev import is_only_thinking_model
+        user_thinking = (
             self.config.provider.thinking
             if (self.config and hasattr(self.config, "provider"))
             else True
         )
+        current_model = self.config.provider.model if (self.config and hasattr(self.config, "provider")) else ""
+        current_prov = self.config.provider.active if (self.config and hasattr(self.config, "provider")) else ""
+        thinking_enabled = user_thinking or is_only_thinking_model(current_model, current_prov)
         persona = get_persona(self.config.jarvis.persona, thinking=thinking_enabled)
 
         memory_ctx = ""
@@ -186,13 +190,7 @@ class JarvisEngine:
         approval_callback = kwargs.get("approval_callback")
 
         while current_turn < max_turns:
-            gen_config = GenerationConfig(
-                model=self.config.provider.model,
-                temperature=self.config.provider.temperature,
-                max_tokens=self.config.provider.max_tokens,
-                top_p=self.config.provider.top_p,
-                tools=tool_defs if tool_defs else None,
-            )
+            gen_config = self._build_gen_config(tool_defs=tool_defs if tool_defs else None)
 
             if not self.provider_manager:
                 raise RuntimeError("Provider manager not available.")
@@ -302,11 +300,15 @@ class JarvisEngine:
         tool_defs, capability_summary = await self._get_tool_definitions(query=message)
         all_raw_defs = await self._get_all_raw_tool_definitions()
 
-        thinking_enabled = (
+        from jarvis.providers.models_dev import is_only_thinking_model
+        user_thinking = (
             self.config.provider.thinking
             if (self.config and hasattr(self.config, "provider"))
             else True
         )
+        current_model = self.config.provider.model if (self.config and hasattr(self.config, "provider")) else ""
+        current_prov = self.config.provider.active if (self.config and hasattr(self.config, "provider")) else ""
+        thinking_enabled = user_thinking or is_only_thinking_model(current_model, current_prov)
         persona = get_persona(self.config.jarvis.persona, thinking=thinking_enabled)
 
         memory_ctx = ""
@@ -343,13 +345,7 @@ class JarvisEngine:
 
         try:
             for _ in range(max_turns):
-                gen_config = GenerationConfig(
-                    model=self.config.provider.model,
-                    temperature=self.config.provider.temperature,
-                    max_tokens=self.config.provider.max_tokens,
-                    top_p=self.config.provider.top_p,
-                    tools=tool_defs if tool_defs else None,
-                )
+                gen_config = self._build_gen_config(tool_defs=tool_defs if tool_defs else None)
 
                 content_parts: list[str] = []
                 tool_calls_box: dict[str, Any] = {}
@@ -787,6 +783,45 @@ class JarvisEngine:
 
         tool_call_id = tool_call.get("id", f"call_{tool_name}")
         return tool_name, tool_args, tool_call_id
+
+    def _build_gen_config(
+        self, tool_defs: list[ToolDefinition] | None = None
+    ) -> GenerationConfig:
+        """Construct a GenerationConfig safely from the current provider config."""
+        p_cfg = getattr(self.config, "provider", None) if self.config else None
+
+        model = str(getattr(p_cfg, "model", "llama-3.3-70b-versatile")) if p_cfg else "llama-3.3-70b-versatile"
+        temp = getattr(p_cfg, "temperature", 0.7)
+        temperature = float(temp) if isinstance(temp, (int, float)) else 0.7
+        m_tokens = getattr(p_cfg, "max_tokens", 4096)
+        max_tokens = int(m_tokens) if isinstance(m_tokens, int) else 4096
+        tp = getattr(p_cfg, "top_p", 1.0)
+        top_p = float(tp) if isinstance(tp, (int, float)) else 1.0
+
+        th = getattr(p_cfg, "thinking", True)
+        thinking = bool(th) if isinstance(th, bool) else True
+
+        re = getattr(p_cfg, "reasoning_effort", None)
+        reasoning_effort = str(re) if isinstance(re, str) else None
+
+        tb = getattr(p_cfg, "thinking_budget", None)
+        thinking_budget = int(tb) if isinstance(tb, int) else None
+
+        pid = getattr(p_cfg, "active", None)
+        provider_id = str(pid) if isinstance(pid, str) else None
+
+        return GenerationConfig(
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            top_p=top_p,
+            tools=tool_defs,
+            thinking=thinking,
+            reasoning_effort=reasoning_effort,
+            thinking_budget=thinking_budget,
+            provider_id=provider_id,
+        )
+
 
     async def _stream_turn(
         self,

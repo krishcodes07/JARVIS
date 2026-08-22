@@ -65,7 +65,9 @@ class ModalDialog(Vertical):
     ModalDialog .modal-title-bar {
         height: 1;
         layout: horizontal;
+        margin-bottom: 1;
     }
+
 
     ModalDialog .modal-title {
         width: 1fr;
@@ -180,6 +182,11 @@ class ModalDialog(Vertical):
                 self.styles.border = (parts[0], parts[1])  # type: ignore[assignment]
             elif len(parts) == 1:
                 self.styles.border = (parts[0], "white")  # type: ignore[assignment]
+
+    @property
+    def title(self) -> str:
+        return self._title_text
+
 
     def compose(self):
         with Horizontal(classes="modal-title-bar"):

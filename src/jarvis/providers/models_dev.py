@@ -405,3 +405,158 @@ def get_model_context_limit(model_id: str, provider_id: str | None = None) -> in
                     return int(ctx)
 
     return 128000
+
+
+def get_model_info(
+    model_id: str,
+    provider_id: str | None = None,
+    cache: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Retrieve the models.dev dictionary for a model.
+
+    Args:
+        model_id: The model identifier (e.g. 'deepseek-reasoner', 'deepseek/deepseek-v4-flash').
+        provider_id: Optional provider identifier to search under first.
+        cache: Preloaded models.dev cache if available.
+
+    Returns:
+        The model's metadata dictionary, or None if not found.
+    """
+    if not model_id:
+        return None
+
+    if cache is None:
+        cache = load_models_dev_cache()
+    if not cache:
+        return None
+
+    clean_model_id = model_id
+    if "/" in model_id:
+        parts = model_id.split("/", 1)
+        if not provider_id:
+            provider_id = parts[0]
+        clean_model_id = parts[1]
+
+    # 1. Direct lookup under provider_id if given
+    if provider_id:
+        prov_clean = provider_id.lower()
+        for p_id, p_data in cache.items():
+            if p_id.lower() == prov_clean:
+                models = p_data.get("models", {})
+                for m_key, m_data in models.items():
+                    if not isinstance(m_data, dict):
+                        continue
+                    m_id_field = m_data.get("id", "")
+                    if (
+                        m_key.lower() in (model_id.lower(), clean_model_id.lower())
+                        or (m_id_field and m_id_field.lower() in (model_id.lower(), clean_model_id.lower()))
+                    ):
+                        return m_data
+
+    # 2. Search across all providers in cache, prioritizing entries with reasoning/tool_call metadata
+    candidates: list[dict[str, Any]] = []
+    for p_id, p_data in cache.items():
+        models = p_data.get("models", {})
+        for m_key, m_data in models.items():
+            if not isinstance(m_data, dict):
+                continue
+            m_id_field = m_data.get("id", "")
+            if (
+                m_key.lower() in (model_id.lower(), clean_model_id.lower())
+                or (m_id_field and m_id_field.lower() in (model_id.lower(), clean_model_id.lower()))
+            ):
+                # If provider name matches prefix (e.g. deepseek/...), top priority
+                if "/" in model_id and p_id.lower() == model_id.split("/", 1)[0].lower():
+                    return m_data
+                candidates.append(m_data)
+
+    if candidates:
+        # Prefer a candidate that has explicit reasoning metadata
+        for cand in candidates:
+            if cand.get("reasoning") is True:
+                return cand
+        return candidates[0]
+
+    return None
+
+
+
+def is_reasoning_model(
+    model_id: str,
+    provider_id: str | None = None,
+    model_info: dict[str, Any] | None = None,
+) -> bool:
+    """Return True if the model is capable of reasoning/thinking in models.dev."""
+    if model_info is None:
+        model_info = get_model_info(model_id, provider_id)
+    if not model_info:
+        # Fallback heuristic for known reasoning naming patterns if cache misses
+        m_lower = model_id.lower()
+        return any(hint in m_lower for hint in ("reasoner", "thinking", "r1", "o1", "o3"))
+    return model_info.get("reasoning") is True
+
+
+def get_model_reasoning_options(
+    model_id: str,
+    provider_id: str | None = None,
+    model_info: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    """Return list of reasoning options (toggle, effort, budget_tokens) supported by the model."""
+    if model_info is None:
+        model_info = get_model_info(model_id, provider_id)
+    if not model_info:
+        return []
+    options = model_info.get("reasoning_options")
+    if isinstance(options, list):
+        return [opt for opt in options if isinstance(opt, dict)]
+    return []
+
+
+def has_configurable_reasoning(
+    model_id: str,
+    provider_id: str | None = None,
+    model_info: dict[str, Any] | None = None,
+) -> bool:
+    """Return True if the model supports reasoning AND provides configurable reasoning options.
+
+    These models allow turning reasoning on/off or setting effort / token budget.
+    """
+    if model_info is None:
+        model_info = get_model_info(model_id, provider_id)
+    if not is_reasoning_model(model_id, provider_id, model_info):
+        return False
+    options = get_model_reasoning_options(model_id, provider_id, model_info)
+    return len(options) > 0
+
+
+def is_only_thinking_model(
+    model_id: str,
+    provider_id: str | None = None,
+    model_info: dict[str, Any] | None = None,
+) -> bool:
+    """Return True if the model is inherently a reasoning model that cannot disable reasoning.
+
+    In models.dev, these models have reasoning: true but reasoning_options: [] (empty list or None).
+    Examples include deepseek-reasoner, kimi-k2.7-code, minimax-m2.5, etc.
+    """
+    if model_info is None:
+        model_info = get_model_info(model_id, provider_id)
+    if not is_reasoning_model(model_id, provider_id, model_info):
+        return False
+    options = get_model_reasoning_options(model_id, provider_id, model_info)
+    return len(options) == 0
+
+
+def get_model_effort_values(
+    model_id: str,
+    provider_id: str | None = None,
+    model_info: dict[str, Any] | None = None,
+) -> list[str]:
+    """Return the list of allowed effort values (e.g. ['none', 'low', 'medium', 'high']) if supported."""
+    options = get_model_reasoning_options(model_id, provider_id, model_info)
+    for opt in options:
+        if opt.get("type") == "effort":
+            values = opt.get("values")
+            if isinstance(values, list):
+                return [str(v) for v in values]
+    return []

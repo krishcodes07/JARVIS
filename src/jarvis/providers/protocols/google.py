@@ -295,7 +295,8 @@ class GoogleProvider(BaseProvider):
             elif k == "enum" and isinstance(v, list):
                 cleaned[k] = [str(x) for x in v]
             elif k == "required" and isinstance(v, list):
-                cleaned[k] = [str(x) for x in v if isinstance(x, str)]
+                cleaned[k] = [x for x in v if isinstance(x, str)]
+
             elif isinstance(v, dict):
                 cleaned[k] = self._clean_schema(v)
             elif isinstance(v, list):
@@ -398,13 +399,32 @@ class GoogleProvider(BaseProvider):
         config: GenerationConfig,
     ) -> dict[str, Any]:
         """Build the Google API request payload."""
+        gen_cfg: dict[str, Any] = {
+            "temperature": config.temperature,
+            "maxOutputTokens": config.max_tokens,
+            "topP": config.top_p,
+        }
+
+        # Handle Gemini thinking configuration based on models.dev and config.thinking
+        from jarvis.providers.models_dev import (
+            get_model_info,
+            has_configurable_reasoning,
+        )
+
+        model_info = get_model_info(config.model, config.provider_id or "google")
+
+        if not config.thinking or config.reasoning_effort == "none":
+            if has_configurable_reasoning(config.model, config.provider_id or "google", model_info):
+                gen_cfg["thinkingConfig"] = {"thinkingBudget": 0}
+            # For only-thinking models, do not set thinkingBudget: 0 to avoid breaking requests
+        elif config.thinking:
+            if has_configurable_reasoning(config.model, config.provider_id or "google", model_info):
+                if config.thinking_budget is not None:
+                    gen_cfg["thinkingConfig"] = {"thinkingBudget": config.thinking_budget}
+
         payload: dict[str, Any] = {
             "contents": contents,
-            "generationConfig": {
-                "temperature": config.temperature,
-                "maxOutputTokens": config.max_tokens,
-                "topP": config.top_p,
-            },
+            "generationConfig": gen_cfg,
         }
 
         if system_instruction:
@@ -428,6 +448,7 @@ class GoogleProvider(BaseProvider):
 
         return payload
 
+
     def _extract_thought_signature(
         self, part: dict[str, Any], fc: dict[str, Any]
     ) -> str | None:
@@ -445,13 +466,14 @@ class GoogleProvider(BaseProvider):
         if not candidates:
             return GenerationResponse(content="", finish_reason="error")
 
+
         candidate = candidates[0]
         content_parts: list[str] = []
         tool_calls: list[dict[str, Any]] = []
 
         for part in candidate.get("content", {}).get("parts", []):
             if "text" in part:
-                if part.get("thought") is True or ("thought" in part and part.get("thought")):
+                if part.get("thought"):
                     content_parts.append(f"<think>\n{part['text']}\n</think>")
                 else:
                     content_parts.append(part["text"])

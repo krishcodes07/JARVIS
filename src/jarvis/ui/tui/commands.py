@@ -23,14 +23,14 @@ COMMAND_REGISTRY: list[SlashCommand] = [
     SlashCommand("/connect", "Connect model or API provider", "/connect <provider>", "action_connect"),
     SlashCommand("/clear", "Start a new conversation session", "/clear", "action_clear"),
     SlashCommand("/copy", "Copy last AI response to clipboard", "/copy", "action_copy"),
+    SlashCommand("/effort", "Set reasoning effort level for reasoning models", "/effort [level]", "action_effort"),
     SlashCommand("/theme", "Browse & switch UI color themes", "/theme [name]", "action_theme"),
     SlashCommand("/config", "View current JARVIS configuration", "/config", "action_config"),
     SlashCommand("/mcp", "View MCP server status and connections", "/mcp", "action_mcps"),
-    SlashCommand("/automate", "Run autonomous PC desktop task", "/automate <goal>", "action_automate"),
-    SlashCommand("/pc", "Control PC / Desktop Automation", "/pc <goal>", "action_automate"),
     SlashCommand("/debug", "View engine & system debug info", "/debug", "action_debug"),
     SlashCommand("/help", "Show help and commands overview", "/help", "action_help"),
     SlashCommand("/exit", "Exit the JARVIS application", "/exit", "action_exit"),
+
 ]
 
 

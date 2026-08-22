@@ -43,6 +43,10 @@ class GenerationConfig(BaseModel):
     top_p: float = 1.0
     stop: list[str] | None = None
     tools: list[ToolDefinition] | None = None
+    thinking: bool = True
+    reasoning_effort: str | None = None
+    thinking_budget: int | None = None
+    provider_id: str | None = None
 
 
 class GenerationResponse(BaseModel):

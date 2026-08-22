@@ -31,6 +31,7 @@ from jarvis.ui.tui.screens.modals import (
     ConfigModal,
     ConnectModal,
     DebugModal,
+    EffortModal,
     HelpModal,
     MCPModal,
     MessageActionsModal,
@@ -150,11 +151,36 @@ class MainScreen(Screen):
     def update_engine_status(self) -> None:
         if self.engine and self.engine.config:
             c = self.engine.config
+            from jarvis.providers.models_dev import (
+                is_reasoning_model,
+                has_configurable_reasoning,
+                is_only_thinking_model,
+                get_model_effort_values,
+            )
+            model = c.provider.model
+            provider = c.provider.active
+
+            reasoning_badge = "off"
+            if is_only_thinking_model(model, provider):
+                reasoning_badge = "inherent"
+            elif not c.provider.thinking or (c.provider.reasoning_effort and c.provider.reasoning_effort.lower() == "none"):
+                reasoning_badge = "off"
+            elif c.provider.reasoning_effort:
+                reasoning_badge = c.provider.reasoning_effort
+            elif has_configurable_reasoning(model, provider):
+                efforts = get_model_effort_values(model, provider)
+                non_none = [e for e in efforts if e.lower() != "none"]
+                reasoning_badge = non_none[0] if non_none else "on"
+            elif is_reasoning_model(model, provider):
+                reasoning_badge = "on"
+            else:
+                reasoning_badge = "off"
+
             self.prompt_box.update_badges(
                 mode="",
                 model=c.provider.model,
                 provider=c.provider.active,
-                reasoning="high",
+                reasoning=reasoning_badge,
             )
             if self.status_bar.context_tokens is not None:
                 self._update_context_display()
@@ -535,10 +561,23 @@ class MainScreen(Screen):
             "/config": self.action_open_config,
             "/debug": self.action_open_debug,
             "/theme": self.action_open_theme,
+            "/effort": self.action_open_effort,
         }
 
         if cmd in modal_handlers:
-            if cmd == "/theme" and args:
+            if cmd == "/effort" and args:
+                target_effort = args[0].lower()
+                if self.engine and self.engine.config:
+                    if target_effort == "none":
+                        self.engine.config.provider.reasoning_effort = "none"
+                        self.engine.config.provider.thinking = False
+                    else:
+                        self.engine.config.provider.reasoning_effort = target_effort
+                        self.engine.config.provider.thinking = True
+                    self.engine.config.save()
+                    self.update_engine_status()
+                    self.show_toast(f"Reasoning effort set to: {target_effort}", title="Effort Updated", style="success")
+            elif cmd == "/theme" and args:
                 target_theme = args[0].lower()
                 from jarvis.ui.tui.theme import THEME_REGISTRY, apply_theme, get_theme
                 if target_theme in THEME_REGISTRY:
@@ -1042,4 +1081,55 @@ class MainScreen(Screen):
     def action_open_theme(self) -> None:
         self._dismiss_active_modals()
         self.app.push_screen(ThemeModal(engine=self.engine))
+
+    def action_open_effort(self) -> None:
+        if not self.engine or not self.engine.config or not self.engine.config.provider:
+            return
+
+        model_id = self.engine.config.provider.model
+        provider_id = self.engine.config.provider.active
+
+        from jarvis.providers.models_dev import (
+            get_model_effort_values,
+            has_configurable_reasoning,
+            is_only_thinking_model,
+        )
+
+        efforts = get_model_effort_values(model_id, provider_id)
+        if not efforts and not has_configurable_reasoning(model_id, provider_id):
+            if is_only_thinking_model(model_id, provider_id):
+                self.show_toast(
+                    f"Model '{model_id}' is an inherent reasoning model with fixed reasoning.",
+                    title="Fixed Reasoning Model",
+                    style="info",
+                )
+            else:
+                self.show_toast(
+                    f"Model '{model_id}' does not support configurable reasoning effort.",
+                    title="Effort Unsupported",
+                    style="warning",
+                )
+            return
+
+        def on_effort_selected(effort: str | None) -> None:
+            if effort is not None and self.engine and self.engine.config:
+                if effort.lower() == "none":
+                    self.engine.config.provider.reasoning_effort = "none"
+                    self.engine.config.provider.thinking = False
+                else:
+                    self.engine.config.provider.reasoning_effort = effort.lower()
+                    self.engine.config.provider.thinking = True
+                self.engine.config.save()
+                self.update_engine_status()
+                self.show_toast(
+                    f"Reasoning effort set to: {effort}",
+                    title="Effort Updated",
+                    style="success",
+                )
+
+        self._dismiss_active_modals()
+        self.app.push_screen(
+            EffortModal(engine=self.engine, available_efforts=efforts),
+            on_effort_selected,
+        )
 

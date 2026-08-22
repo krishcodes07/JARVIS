@@ -213,7 +213,54 @@ class OpenAIProvider(BaseProvider):
                 for tool in config.tools
             ]
 
+        # Handle reasoning / thinking based on models.dev catalog and config.thinking
+        from jarvis.providers.models_dev import (
+            get_model_info,
+            has_configurable_reasoning,
+            get_model_effort_values,
+        )
+
+        model_info = get_model_info(config.model, config.provider_id)
+
+        if not config.thinking or config.reasoning_effort == "none":
+            # User disabled thinking:
+            # If the model has reasoning options (configurable reasoning), do NOT give reasoning options / disable reasoning
+            if has_configurable_reasoning(config.model, config.provider_id, model_info):
+                effort_values = get_model_effort_values(config.model, config.provider_id, model_info)
+                if "none" in effort_values:
+                    payload["reasoning_effort"] = "none"
+                else:
+                    opts = model_info.get("reasoning_options", []) if model_info else []
+                    has_toggle = any(isinstance(o, dict) and o.get("type") == "toggle" for o in opts)
+                    if has_toggle:
+                        payload["reasoning"] = False
+            # If is_only_thinking_model: thinking cannot be disabled, so we don't send disabling flags and let it think normally
+        elif config.thinking:
+
+
+            # User enabled thinking:
+            if has_configurable_reasoning(config.model, config.provider_id, model_info):
+                effort_values = get_model_effort_values(config.model, config.provider_id, model_info)
+                if effort_values:
+                    effort = config.reasoning_effort
+                    if not effort or effort not in effort_values:
+                        for preferred in ("high", "medium", "low", "max", "xhigh"):
+                            if preferred in effort_values:
+                                effort = preferred
+                                break
+                        if not effort and effort_values:
+                            non_none = [v for v in effort_values if v != "none"]
+                            effort = non_none[0] if non_none else effort_values[-1]
+                    if effort and effort != "none":
+                        payload["reasoning_effort"] = effort
+                else:
+                    opts = model_info.get("reasoning_options", []) if model_info else []
+                    has_toggle = any(isinstance(o, dict) and o.get("type") == "toggle" for o in opts)
+                    if has_toggle:
+                        payload["reasoning"] = True
+
         return payload
+
 
     def _format_message(self, message: Message) -> dict[str, Any]:
         """Format a Message for the OpenAI API."""

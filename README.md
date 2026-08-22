@@ -386,20 +386,20 @@ JARVIS includes a full hands-free voice suite:
 
 JARVIS TUI supports rich interactive slash commands:
 
-- `/automate <goal>` or `/pc <goal>` — Run an autonomous multi-step PC desktop automation workflow.
 - `/new` — Start a new conversation session with a unique session ID.
 - `/clear` — Reset conversation, delete current session, and start a fresh session (with top-right notification toast).
 - `/copy` — Copy the last AI assistant response directly to system clipboard silently.
+- `/effort [level]` — Open reasoning effort dialog or set reasoning level (`low`, `medium`, `high`, `none`).
+- `/theme [name]` — Browse and switch UI color themes.
 - `/models` — Open model selection modal or switch active LLM model.
+- `/connect <provider>` — Connect model or API provider with auto-configured endpoints.
 - `/sessions` — Manage and switch active conversation sessions.
 - `/mcp` — Open MCP server manager modal and inspect connections.
-- `/voice` — Toggle hands-free voice mode on/off.
-- `/tts <provider>` — Switch TTS provider (`edge_tts` / `elevenlabs`).
-- `/stt <provider>` — Switch STT provider (`sr` / `whisper`).
-- `/voices` — List available TTS voices.
 - `/config` — View and edit active runtime configuration.
 - `/debug` — Inspect system status, provider metrics, and event diagnostics.
 - `/help` — Display commands overview and keybindings.
+- `/exit` / `/quit` — Exit the application.
+
 
 ---
 

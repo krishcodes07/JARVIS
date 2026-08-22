@@ -294,5 +294,66 @@ def test_google_provider_thought_parsing():
     assert "Direct response to user." in resp.content
 
 
+def test_openai_payload_thinking_toggle_and_reasoning_options():
+    openai_p = OpenAIProvider(api_key="test", base_url="https://api.openai.com/v1")
+    msgs = [Message(role="user", content="hello")]
+
+    # 1. Configurable reasoning model with effort (e.g. gpt-5.5) and thinking=True
+    cfg_on = GenerationConfig(model="gpt-5.5", thinking=True, reasoning_effort="high")
+    payload_on = openai_p._build_payload(msgs, cfg_on)
+    assert payload_on.get("reasoning_effort") == "high"
+
+    # 2. Configurable reasoning model with effort that supports "none" (e.g. gpt-5.5) and thinking=False
+    cfg_off = GenerationConfig(model="gpt-5.5", thinking=False)
+    payload_off = openai_p._build_payload(msgs, cfg_off)
+    assert payload_off.get("reasoning_effort") == "none"
+
+    # 3. Only-thinking model (e.g. deepseek-reasoner) when thinking=False: does not pass reasoning_effort or reasoning=False
+    cfg_only_off = GenerationConfig(model="deepseek-reasoner", provider_id="deepseek", thinking=False)
+    payload_only_off = openai_p._build_payload(msgs, cfg_only_off)
+    assert "reasoning_effort" not in payload_only_off
+    assert payload_only_off.get("reasoning") is not False
+
+    # 4. Standard non-reasoning model (e.g. llama-3.3-70b-versatile)
+    cfg_standard = GenerationConfig(model="llama-3.3-70b-versatile", thinking=False)
+    payload_standard = openai_p._build_payload(msgs, cfg_standard)
+    assert "reasoning_effort" not in payload_standard
+    assert "reasoning" not in payload_standard
+
+
+def test_anthropic_payload_thinking_toggle():
+    anthropic_p = AnthropicProvider(api_key="test", base_url="https://api.anthropic.com")
+    msgs = [{"role": "user", "content": "hello"}]
+
+    # 1. Configurable model (claude-opus-4-7 / claude-sonnet-5) with thinking=True
+    cfg_on = GenerationConfig(model="claude-opus-4-7", provider_id="anthropic", thinking=True, thinking_budget=2048)
+    payload_on = anthropic_p._build_payload("system", msgs, cfg_on)
+    assert "thinking" in payload_on
+    assert payload_on["thinking"]["type"] == "enabled"
+    assert payload_on["thinking"]["budget_tokens"] == 2048
+    assert payload_on["max_tokens"] > 2048
+
+    # 2. Configurable model with thinking=False -> thinking omitted
+    cfg_off = GenerationConfig(model="claude-opus-4-7", provider_id="anthropic", thinking=False)
+    payload_off = anthropic_p._build_payload("system", msgs, cfg_off)
+    assert "thinking" not in payload_off
+
+
+def test_google_payload_thinking_toggle():
+    google_p = GoogleProvider(api_key="test", base_url="https://generativelanguage.googleapis.com/v1beta")
+    msgs = [Message(role="user", content="hello")]
+
+    # 1. Configurable reasoning model (gemini-flash-lite-latest) with thinking=False
+    cfg_off = GenerationConfig(model="gemini-flash-lite-latest", provider_id="google", thinking=False)
+    sys_inst, contents = google_p._format_contents(msgs)
+    payload_off = google_p._build_payload(sys_inst, contents, cfg_off)
+    assert payload_off["generationConfig"].get("thinkingConfig") == {"thinkingBudget": 0}
+
+    # 2. Only-thinking model with thinking=False -> does not force thinkingBudget: 0
+    cfg_only_off = GenerationConfig(model="gemini-3.1-flash-tts-preview", provider_id="google", thinking=False)
+    payload_only_off = google_p._build_payload(sys_inst, contents, cfg_only_off)
+    assert "thinkingConfig" not in payload_only_off["generationConfig"]
+
+
 
 
