@@ -27,7 +27,7 @@ __all__ = [
     "PromptBoxWidget",
     "PromptInputTextArea",
     "StatusBarWidget",
-    "TipBarWidget",
     "ThoughtWidget",
+    "TipBarWidget",
     "ToolCallWidget",
 ]

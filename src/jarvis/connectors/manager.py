@@ -9,9 +9,8 @@ import logging
 from typing import TYPE_CHECKING
 
 from jarvis.connectors.base import BaseConnector
-from jarvis.connectors.discord.connector import DiscordConnector
+from jarvis.connectors.discovery import discover_connector_classes
 from jarvis.connectors.models import ConnectorStatus
-from jarvis.connectors.telegram.connector import TelegramConnector
 
 if TYPE_CHECKING:
     from jarvis.core.config import JarvisConfig
@@ -23,8 +22,8 @@ logger = logging.getLogger(__name__)
 class ConnectorManager:
     """Orchestrates all messaging connectors (Telegram, Discord, etc.).
 
-    Auto-registers connectors from configuration, handles concurrent startup of enabled bridges,
-    graceful shutdowns, and health reporting.
+    Auto-discovers connectors from the filesystem, handles concurrent startup of
+    enabled bridges, graceful shutdowns, and health reporting.
     """
 
     def __init__(self, config: JarvisConfig, engine: JarvisEngine) -> None:
@@ -32,13 +31,37 @@ class ConnectorManager:
         self.engine = engine
         self._connectors: dict[str, BaseConnector] = {}
 
-        # Register default connectors
-        self._register_default_connectors()
+        self._register_discovered_connectors()
 
-    def _register_default_connectors(self) -> None:
-        """Instantiate and register all built-in connectors."""
-        self.register(TelegramConnector(self.config, self.engine))
-        self.register(DiscordConnector(self.config, self.engine))
+    def _register_discovered_connectors(self) -> None:
+        """Instantiate and register every connector found on disk.
+
+        Connectors are discovered rather than listed, so adding a package under
+        ``jarvis/connectors/`` or ``~/.jarvis/connectors/`` is enough to make it
+        available. One broken connector never prevents the others from loading.
+        """
+        classes = discover_connector_classes()
+        if not classes:
+            logger.warning("No messaging connectors were discovered.")
+            return
+
+        for name, cls in classes.items():
+            try:
+                self.register(cls(self.config, self.engine))
+            except Exception as e:
+                logger.error(
+                    "Failed to instantiate connector '%s' (%s): %s",
+                    name,
+                    cls.__name__,
+                    e,
+                    exc_info=True,
+                )
+
+        logger.info(
+            "Registered %d connector(s): %s",
+            len(self._connectors),
+            ", ".join(sorted(self._connectors)) or "none",
+        )
 
     def register(self, connector: BaseConnector) -> None:
         """Register a connector instance."""

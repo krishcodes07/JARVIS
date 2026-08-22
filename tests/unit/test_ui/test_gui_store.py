@@ -1,7 +1,8 @@
 """Unit tests for GUI ConversationStore."""
 
 import pytest
-from jarvis.ui.gui.store import ConversationStore, ConversationSummary, ConversationMessage
+
+from jarvis.ui.gui.store import ConversationStore
 
 
 def test_conversation_store_crud(tmp_path):
@@ -53,8 +54,9 @@ def test_add_message_validation(tmp_path):
 
 def test_conversation_view_clear_and_pending():
     from PySide6.QtWidgets import QApplication
-    from jarvis.ui.gui.widgets.chat_view import ConversationView
+
     from jarvis.ui.gui.themes import get_theme
+    from jarvis.ui.gui.widgets.chat_view import ConversationView
 
     app = QApplication.instance() or QApplication([])
     view = ConversationView(get_theme("Midnight", "Electric Blue"))

@@ -761,7 +761,7 @@ def apply_theme(app: App, theme_id: str) -> bool:
     try:
         if not getattr(app, "_jarvis_themes_registered", False):
             register_all_themes(app)
-            setattr(app, "_jarvis_themes_registered", True)
+            app._jarvis_themes_registered = True
 
         app.theme = theme.id
         return True

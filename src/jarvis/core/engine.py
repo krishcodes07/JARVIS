@@ -38,6 +38,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_ACTIVE_ENGINE: JarvisEngine | None = None
+
+
+def get_active_engine() -> JarvisEngine | None:
+    """Return the currently active running JarvisEngine instance, if any."""
+    return _ACTIVE_ENGINE
+
 
 class JarvisEngine:
     """Main JARVIS engine — orchestrates all subsystems.
@@ -111,6 +118,9 @@ class JarvisEngine:
         from jarvis.core.session import Session
         self.session = Session(engine=self)
 
+        global _ACTIVE_ENGINE
+        _ACTIVE_ENGINE = self
+
         self._initialized = True
         logger.info("JARVIS engine initialized successfully.")
 
@@ -140,7 +150,7 @@ class JarvisEngine:
         # 3. Build system prompt & context
         thinking_enabled = (
             self.config.provider.thinking
-            if (self.config and hasattr(self.config, "provider") and hasattr(self.config.provider, "thinking"))
+            if (self.config and hasattr(self.config, "provider"))
             else True
         )
         persona = get_persona(self.config.jarvis.persona, thinking=thinking_enabled)
@@ -193,7 +203,9 @@ class JarvisEngine:
             if not response.tool_calls:
                 final_answer = response.content
                 if self.memory_manager:
-                    await self.memory_manager.add_message(session_id, "assistant", final_answer, model=self.last_used_model)
+                    await self.memory_manager.add_message(
+                        session_id, "assistant", final_answer, model=self.last_used_model
+                    )
                 self._schedule_memory_extraction(session_id, message, final_answer)
                 return final_answer
 
@@ -230,7 +242,10 @@ class JarvisEngine:
                     tool_args,
                     approval_callback=approval_callback,
                 )
-                self._update_tool_defs_from_schema_call(tool_defs, tool_name, tool_args, all_raw_defs)
+                all_raw_defs = await self._get_all_raw_tool_definitions()
+                self._update_tool_defs_from_schema_call(
+                    tool_defs, tool_name, tool_args, all_raw_defs
+                )
 
                 if callable(on_tool_result):
                     with contextlib.suppress(Exception):
@@ -289,7 +304,7 @@ class JarvisEngine:
 
         thinking_enabled = (
             self.config.provider.thinking
-            if (self.config and hasattr(self.config, "provider") and hasattr(self.config.provider, "thinking"))
+            if (self.config and hasattr(self.config, "provider"))
             else True
         )
         persona = get_persona(self.config.jarvis.persona, thinking=thinking_enabled)
@@ -350,7 +365,9 @@ class JarvisEngine:
                 if not tool_calls:
                     final_text = "".join(content_parts)
                     if self.memory_manager:
-                        await self.memory_manager.add_message(session_id, "assistant", final_text, model=self.last_used_model)
+                        await self.memory_manager.add_message(
+                            session_id, "assistant", final_text, model=self.last_used_model
+                        )
                         saved_assistant_msg = True
                     self._schedule_memory_extraction(session_id, message, final_text)
                     return
@@ -387,7 +404,10 @@ class JarvisEngine:
                         tool_args,
                         approval_callback=approval_callback,
                     )
-                    self._update_tool_defs_from_schema_call(tool_defs, tool_name, tool_args, all_raw_defs)
+                    all_raw_defs = await self._get_all_raw_tool_definitions()
+                    self._update_tool_defs_from_schema_call(
+                        tool_defs, tool_name, tool_args, all_raw_defs
+                    )
 
                     if callable(on_tool_result):
                         with contextlib.suppress(Exception):
@@ -420,7 +440,9 @@ class JarvisEngine:
                 partial_text = "".join(accumulated_assistant_chunks).strip()
                 if partial_text and self.memory_manager:
                     with contextlib.suppress(Exception):
-                        await self.memory_manager.add_message(session_id, "assistant", partial_text, model=self.last_used_model)
+                        await self.memory_manager.add_message(
+                            session_id, "assistant", partial_text, model=self.last_used_model
+                        )
                         saved_assistant_msg = True
             raise err
 
@@ -442,6 +464,10 @@ class JarvisEngine:
         if self.automation_engine:
             await self.automation_engine.shutdown()
             self.automation_engine = None
+
+        global _ACTIVE_ENGINE
+        if _ACTIVE_ENGINE is self:
+            _ACTIVE_ENGINE = None
 
         self._initialized = False
         logger.info("JARVIS engine shut down.")
@@ -500,6 +526,7 @@ class JarvisEngine:
         from jarvis.tools.registry import ToolRegistry
         self.tool_registry = ToolRegistry(config)
         self.tool_registry.discover_tools()
+        self.tool_registry.set_engine(self)
 
         # Wire provider_manager into tools that need agent delegation
         if "automate_task" in self.tool_registry:
@@ -507,7 +534,7 @@ class JarvisEngine:
             if hasattr(tool_inst, "set_provider_manager"):
                 tool_inst.set_provider_manager(self.provider_manager)
             else:
-                setattr(tool_inst, "_provider_manager", self.provider_manager)
+                tool_inst._provider_manager = self.provider_manager
 
         self.tool_executor = ToolExecutor(config, self.tool_registry)
         logger.info(f"Tool registry initialized with {len(self.tool_registry)} tools.")
@@ -595,7 +622,8 @@ class JarvisEngine:
                 )
             elif role == "tool":
                 tool_name = msg.get("tool_name") or msg.get("name")
-                tool_call_id = msg.get("tool_call_id") or (f"call_{tool_name}" if tool_name else "call_tool")
+                def_call_id = f"call_{tool_name}" if tool_name else "call_tool"
+                tool_call_id = msg.get("tool_call_id") or def_call_id
 
                 # If the preceding message is not an assistant message with tool_calls,
                 # synthesize the matching assistant tool_calls message for schema consistency.
@@ -634,7 +662,7 @@ class JarvisEngine:
         tool_args: dict[str, Any],
         all_raw_defs: list[ToolDefinition],
     ) -> None:
-        """If get_schema was invoked, add requested tool schemas to tool_defs for subsequent turns."""
+        """If get_schema was invoked, add requested tool schemas for subsequent turns."""
         if tool_name != "get_schema":
             return
         raw_names = tool_args.get("tool_names") or tool_args.get("names") or []
@@ -652,8 +680,12 @@ class JarvisEngine:
                 existing.add(raw.name)
 
     def _get_capability_summary(self, all_tools: list[ToolDefinition]) -> str:
-        """Generate a concise capability summary informing the model of discovery tools and skills."""
-        skills_enabled = self.config.skills.enabled if (self.config and hasattr(self.config, "skills")) else True
+        """Generate a concise capability summary informing the model of discovery tools."""
+        skills_enabled = (
+            self.config.skills.enabled
+            if (self.config and hasattr(self.config, "skills"))
+            else True
+        )
         skills_info = ""
         if skills_enabled:
             from jarvis.skills.manager import format_skills_for_prompt
@@ -663,8 +695,8 @@ class JarvisEngine:
 
         return (
             "JARVIS has access to external tools and MCP capabilities.\n"
-            "- Use `list_tools()` to discover all available tool names (built-in and MCP tools).\n"
-            "- Use `get_schema(tool_names=[...])` to retrieve the JSON parameters schema for any tool you wish to invoke."
+            "- Use `list_tools()` to discover all available tool names.\n"
+            "- Use `get_schema(tool_names=[...])` to retrieve parameters JSON schema."
             f"{skills_info}"
         )
 
@@ -690,10 +722,12 @@ class JarvisEngine:
 
         return tool_defs
 
-    async def _get_tool_definitions(self, query: str | None = None) -> tuple[list[ToolDefinition], str]:
+    async def _get_tool_definitions(
+        self, query: str | None = None
+    ) -> tuple[list[ToolDefinition], str]:
         """Convert registered tools into provider ToolDefinition list & capability summary.
 
-        Filters total tools down to always_include tools (including list_tools, get_schema, get_skill).
+        Filters total tools down to always_include tools (list_tools, get_schema, get_skill).
         """
         all_defs = await self._get_all_raw_tool_definitions()
         capability_summary = self._get_capability_summary(all_defs)

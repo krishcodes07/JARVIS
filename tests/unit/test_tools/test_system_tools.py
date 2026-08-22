@@ -4,9 +4,9 @@ Unit tests for system tools: run_command, process_manager, and system_info.
 
 import os
 import sys
+
 import pytest
 
-from jarvis.core.config import JarvisConfig
 from jarvis.tools.system.process_manager import ProcessManagerTool
 from jarvis.tools.system.run_command import RunCommandTool
 from jarvis.tools.system.system_info import SystemInfoTool

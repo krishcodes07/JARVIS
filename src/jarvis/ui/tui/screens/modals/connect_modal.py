@@ -16,12 +16,10 @@ from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
 from jarvis.providers.models_dev import (
-    get_provider_env_var,
     get_provider_env_vars,
     is_provider_connected,
     load_models_dev_cache,
 )
-from jarvis.ui.tui.screens.modals.api_key_modal import ApiKeyModal
 from jarvis.ui.tui.utils import handle_search_key_navigation
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
 

@@ -106,11 +106,25 @@ class VoiceManager:
 
     # ─── Speaking ────────────────────────────────────────────
 
+    def _truncate_for_speech(self, text: str) -> str:
+        """Apply max_speak_characters limit if configured (0 or None means unlimited)."""
+        max_chars = getattr(self.config, "max_speak_characters", 0)
+        if max_chars is None:
+            max_chars = getattr(self.config, "max_characters", 0)
+        if max_chars is not None and int(max_chars) > 0 and len(text) > int(max_chars):
+            logger.info(
+                f"Voice output truncated from {len(text)} to {max_chars} characters "
+                "(configured by voice.max_speak_characters)."
+            )
+            return text[: int(max_chars)].rstrip()
+        return text
+
     async def speak(self, text: str, voice: str | None = None) -> None:
         """Synthesize and play text through the speaker.
 
-        Automatically strips markdown syntax formatting (*, #, `, [], etc.)
-        and uses streaming when the TTS provider supports it.
+        Automatically strips markdown syntax formatting (*, #, `, [], etc.),
+        applies max_speak_characters length constraints, and uses streaming
+        when the TTS provider supports it.
         """
         if not self._initialized or self.tts is None or self.player is None:
             return
@@ -118,6 +132,7 @@ class VoiceManager:
             return
 
         clean_text = strip_markdown_for_speech(text)
+        clean_text = self._truncate_for_speech(clean_text)
         if not clean_text:
             return
 
@@ -132,6 +147,7 @@ class VoiceManager:
         if not self._initialized or self.tts is None or self.player is None:
             return
         clean_text = strip_markdown_for_speech(text)
+        clean_text = self._truncate_for_speech(clean_text)
         if not clean_text:
             return
         await self.player.play_stream(self.tts.stream(clean_text, voice))

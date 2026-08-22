@@ -5,8 +5,6 @@ Unit tests for ~/.jarvis user home directory architecture, path resolution, and 
 from __future__ import annotations
 
 import os
-from pathlib import Path
-import pytest
 
 from jarvis.core.config import (
     JarvisConfig,
@@ -15,7 +13,7 @@ from jarvis.core.config import (
     resolve_data_path,
     save_api_key_to_env,
 )
-from jarvis.skills.manager import list_available_skills, get_skill_readme
+from jarvis.skills.manager import get_skill_readme, list_available_skills
 
 
 def test_get_jarvis_home(tmp_path, monkeypatch):
@@ -45,9 +43,14 @@ def test_ensure_jarvis_home(tmp_path, monkeypatch):
     assert (custom_home / "workspace" / "gui").exists()
     assert (custom_home / "workspace" / "skills").exists()
 
-    # Check config and .env file initialized
-    assert (custom_home / "config" / "jarvis.yaml").exists()
+    # Check .env file initialized empty
     assert (custom_home / ".env").exists()
+
+    # When JarvisConfig.load() is called without jarvis.yaml, defaults are used
+    cfg = JarvisConfig.load()
+    assert cfg.jarvis.name == "JARVIS"
+    cfg.save()
+    assert (custom_home / "config" / "jarvis.yaml").exists()
 
 
 def test_resolve_data_path(tmp_path, monkeypatch):
@@ -95,3 +98,4 @@ def test_user_home_env_keys(tmp_path, monkeypatch):
 
     env_content = (custom_home / ".env").read_text(encoding="utf-8")
     assert "TEST_JARVIS_API_KEY=secret_key_12345" in env_content
+

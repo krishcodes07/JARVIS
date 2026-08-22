@@ -11,7 +11,7 @@
 ---
 
 ## Installation
-
+ 
 ```bash
 # Clone the repository
 git clone https://github.com/krishcodes07/JARVIS.git
@@ -24,37 +24,50 @@ python -m venv .venv
 
 # Install JARVIS core package
 pip install -e .
-
-# Copy environment variable template
-copy .env.example .env          # Windows
-# cp .env.example .env          # Linux/Mac
-```
-
-### Optional Extras Installation
-
-Depending on your requirements, you can install additional capability modules:
-
-```bash
-# Voice suite (TTS streaming, STT input, faster-whisper)
-pip install -e ".[voice]"
-
-# MCP server extras (Excel spreadsheet parsing, Telegram client)
-pip install -e ".[mcp]"
-
-# Development, testing, and linting suite (pytest, ruff, mypy)
-pip install -e ".[dev]"
-
-# Install all optional dependencies
-pip install -e ".[voice,mcp,dev]"
 ```
 
 ---
 
-## Quick Configuration
+## First-Time Setup Wizard (Recommended)
+
+Run the interactive setup wizard to validate your provider credentials and configure local embeddings:
+
+```bash
+python setup.py
+# or
+python -m jarvis --setup
+```
+
+The wizard will:
+1. Validate your API keys against live provider endpoints without token cost.
+2. Verify model availability and extended thinking support.
+3. Test or download the bundled offline embedding model (`all-MiniLM-L6-v2`).
+4. Persist your settings to `~/.jarvis/config/jarvis.yaml` and `~/.jarvis/.env`.
+
+---
+
+## Service Authentication (OAuth & Telegram)
+
+Authenticate your personal Google and Telegram accounts directly from the terminal or the in-app MCP modal:
+
+```bash
+# Google Account (Gmail & Calendar) via Native Browser OAuth 2.0
+python main.py --connect gmail
+python main.py --connect calendar
+
+# Personal Telegram User Account (MTProto)
+python main.py --connect telegram
+```
+
+Tokens are automatically encrypted and saved to `~/.jarvis/auth/tokens.json`.
+
+---
+
+## Manual Configuration (Alternative)
 
 ### 1. Set API Keys
 
-Edit `.env` and fill in credentials for your active providers:
+Edit `~/.jarvis/.env` (or `.env` in repository root):
 
 ```env
 GROQ_API_KEY=gsk_your_key_here
@@ -63,12 +76,17 @@ OPENAI_API_KEY=sk-your_key_here
 
 ### 2. Choose Your Active Provider
 
-Edit `config/jarvis.yaml` to specify your preferred backend:
+Edit `~/.jarvis/config/jarvis.yaml`:
 
 ```yaml
 provider:
   active: "groq"
   model: "llama-3.3-70b-versatile"
+
+memory:
+  vector:
+    enabled: true
+    embedding_backend: "auto"     # auto (prefers remote provider, falls back to local MiniLM)
 ```
 
 ---

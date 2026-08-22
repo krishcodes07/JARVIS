@@ -4,9 +4,7 @@ Unit tests for JARVIS Connectors subsystem, BaseConnector, TelegramConnector, an
 
 from __future__ import annotations
 
-import asyncio
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -15,7 +13,7 @@ import pytest
 from jarvis.connectors.base import BaseConnector
 from jarvis.connectors.manager import ConnectorManager
 from jarvis.connectors.models import ConnectorStatus, InboundMessage, OutboundMessage
-from jarvis.connectors.telegram.client import TelegramClient, TelegramClientError
+from jarvis.connectors.telegram.client import TelegramClient
 from jarvis.connectors.telegram.connector import TelegramConnector
 from jarvis.core.config import JarvisConfig
 
@@ -35,7 +33,7 @@ class MockConnector(BaseConnector):
 
     async def start(self) -> None:
         self._running = True
-        self._connected_at = datetime.now(timezone.utc)
+        self._connected_at = datetime.now(UTC)
 
     async def stop(self) -> None:
         self._running = False
@@ -555,8 +553,8 @@ async def test_engine_initializes_and_shuts_down_connectors():
 
     engine = JarvisEngine()
 
-    with patch("jarvis.connectors.manager.TelegramConnector.start", new_callable=AsyncMock) as mock_tg_start:
-        with patch("jarvis.connectors.manager.TelegramConnector.stop", new_callable=AsyncMock) as mock_tg_stop:
+    with patch("jarvis.connectors.telegram.connector.TelegramConnector.start", new_callable=AsyncMock) as mock_tg_start:
+        with patch("jarvis.connectors.telegram.connector.TelegramConnector.stop", new_callable=AsyncMock) as mock_tg_stop:
             async def set_running():
                 if engine.connector_manager:
                     conn = engine.connector_manager.get("telegram")

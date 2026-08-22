@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QCursor, QFont
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import QPushButton, QWidget
 
 if TYPE_CHECKING:

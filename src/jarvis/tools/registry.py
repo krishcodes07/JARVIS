@@ -73,12 +73,24 @@ class ToolRegistry:
 
         logger.info(f"Discovered {len(self._tools)} tools.")
 
+    def set_engine(self, engine: Any) -> None:
+        """Set the engine reference on all registered tools."""
+        self._engine = engine
+        for tool in self._tools.values():
+            tool.engine = engine
+            if hasattr(tool, "config") and tool.config is not None:
+                tool.config._engine = engine
+
     def register(self, tool: BaseTool) -> None:
         """Manually register a tool.
 
         Args:
             tool: A BaseTool instance.
         """
+        if hasattr(self, "_engine") and self._engine:
+            tool.engine = self._engine
+            if hasattr(tool, "config") and tool.config is not None:
+                tool.config._engine = self._engine
         self._tools[tool.name] = tool
         logger.debug(f"Manually registered tool: {tool.name}")
 

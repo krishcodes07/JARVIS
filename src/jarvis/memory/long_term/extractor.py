@@ -13,6 +13,15 @@ from jarvis.providers.base import BaseProvider, GenerationConfig, Message
 
 logger = logging.getLogger(__name__)
 
+
+class MemoryExtractionError(RuntimeError):
+    """Raised when the extraction LLM call itself fails.
+
+    Distinguishes a broken configuration (bad model id, missing key, provider
+    outage) from the ordinary case of the model deciding there is nothing worth
+    remembering, which returns an empty list.
+    """
+
 _EXTRACTION_PROMPT = """You are JARVIS's long-term memory system. Your job is to identify
 information from a conversation that is worth remembering across future sessions.
 
@@ -75,6 +84,12 @@ class MemoryExtractor:
 
         Returns:
             List of extracted memories with 'content', 'category', and 'key'.
+            Empty if there is nothing worth remembering.
+
+        Raises:
+            MemoryExtractionError: If the LLM call fails (bad model id, missing
+                API key, provider error). Swallowing this would make long-term
+                memory look permanently empty with no explanation.
         """
         conversation_text = self._serialize_messages(messages)
         if not conversation_text.strip():
@@ -99,10 +114,12 @@ class MemoryExtractor:
 
         try:
             response = await self._provider.generate(prompt_messages, config)
-            return self._parse_response(response.content)
         except Exception as e:
-            logger.warning(f"Memory extraction failed: {e}")
-            return []
+            raise MemoryExtractionError(
+                f"Memory extraction call failed for model '{self._model}': {e}"
+            ) from e
+
+        return self._parse_response(response.content)
 
     def _serialize_messages(self, messages: list[dict[str, Any]]) -> str:
         """Format conversation messages into readable text."""

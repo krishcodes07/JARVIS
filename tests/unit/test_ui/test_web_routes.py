@@ -1,6 +1,8 @@
 import contextlib
 from unittest.mock import AsyncMock, MagicMock
+
 import pytest
+
 from jarvis.ui.web.routes.chat import set_engine, websocket_chat_endpoint
 
 

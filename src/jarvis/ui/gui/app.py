@@ -67,7 +67,7 @@ async def run_gui(config: JarvisConfig | None = None) -> None:
         if config:
             await engine.initialize(config)
         main(engine=engine)
-    except Exception as e:
+    except Exception:
         logger.exception("Error initializing JARVIS engine for GUI")
         main()
     finally:

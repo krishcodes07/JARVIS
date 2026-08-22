@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator
+from typing import Any
 
 from jarvis.core.exceptions import VoiceAuthError, VoiceProviderError
 from jarvis.voice.base import BaseTTS, VoiceInfo
@@ -23,8 +24,8 @@ DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
 class ElevenLabsProvider(BaseTTS):
     """Text-to-speech via the ElevenLabs API (streaming supported).
 
-    Uses the ``text_to_speech.convert`` endpoint for non-streaming and
-    ``text_to_speech.stream`` for true streaming with lower latency.
+    Uses the ``text_to_speech.stream`` endpoint for low-latency streaming and
+    ``text_to_speech.convert`` for single-shot synthesis.
     """
 
     name = "elevenlabs"
@@ -48,42 +49,78 @@ class ElevenLabsProvider(BaseTTS):
         self.default_voice = getattr(config, "voice", "") or ""
         self.model = getattr(config, "model", "") or DEFAULT_MODEL
         self.output_format = getattr(config, "output_format", "") or DEFAULT_OUTPUT_FORMAT
+        self.optimize_streaming_latency = getattr(config, "optimize_streaming_latency", None)
+        self._cached_voices: list[VoiceInfo] | None = None
 
     @property
     def supports_streaming(self) -> bool:
         return True
 
     async def _resolve_voice(self, voice: str | None) -> str:
-        voice_id = voice or self.default_voice
-        if voice_id:
-            return voice_id
+        target = (voice or self.default_voice or "").strip()
+        # If no voice is specified or default is the edge_tts placeholder
+        if not target or target.startswith("en-US-"):
+            voices = await self.list_voices()
+            if not voices:
+                return "21m00Tcm4TlvDq8ikWAM"  # Default ElevenLabs Rachel ID fallback
+            logger.info(f"Using ElevenLabs voice '{voices[0].name}' ({voices[0].id})")
+            return voices[0].id
+
         voices = await self.list_voices()
-        if not voices:
-            raise VoiceProviderError("No ElevenLabs voices available for this account.")
-        logger.info(f"Using first available ElevenLabs voice: {voices[0].id}")
-        return voices[0].id
+        target_lower = target.lower()
+        for v in voices:
+            if v.id == target or v.name.lower() == target_lower:
+                return v.id
+
+        # If not matching listed names/IDs, check if it's a direct voice ID string
+        if not any(target_lower.startswith(prefix) for prefix in ("en-", "es-", "fr-", "de-", "zh-", "ja-")):
+            return target
+
+        if voices:
+            logger.warning(
+                f"Voice '{target}' not found in ElevenLabs account. Falling back to '{voices[0].name}' ({voices[0].id})."
+            )
+            return voices[0].id
+
+        return "21m00Tcm4TlvDq8ikWAM"
 
     async def synthesize(self, text: str, voice: str | None = None) -> bytes:
-        chunks = [chunk async for chunk in self.stream(text, voice)]
-        return b"".join(chunks)
+        voice_id = await self._resolve_voice(voice)
+        try:
+            chunks = []
+            async for chunk in self._client.text_to_speech.convert(
+                voice_id=voice_id,
+                text=text,
+                model_id=self.model,
+                output_format=self.output_format,
+            ):
+                if chunk:
+                    chunks.append(chunk)
+            return b"".join(chunks)
+        except Exception:
+            # Fallback to collecting stream chunks if convert raises
+            chunks = [chunk async for chunk in self.stream(text, voice)]
+            return b"".join(chunks)
 
     async def stream(self, text: str, voice: str | None = None) -> AsyncIterator[bytes]:
-        """Stream audio chunks using the ElevenLabs streaming endpoint.
-
-        Uses ``text_to_speech.convert`` which already returns an async iterator
-        of audio bytes. The ElevenLabs SDK handles the streaming internally.
-        """
+        """Stream audio chunks using the ElevenLabs streaming endpoint (text_to_speech.stream)."""
         voice_id = await self._resolve_voice(voice)
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                async for chunk in self._client.text_to_speech.convert(
-                    voice_id=voice_id,
-                    text=text,
-                    model_id=self.model,
-                    output_format=self.output_format,
-                ):
-                    yield chunk
+                stream_kwargs: dict[str, Any] = {
+                    "voice_id": voice_id,
+                    "text": text,
+                    "model_id": self.model,
+                    "output_format": self.output_format,
+                }
+                if self.optimize_streaming_latency is not None:
+                    stream_kwargs["optimize_streaming_latency"] = self.optimize_streaming_latency
+
+                audio_stream = self._client.text_to_speech.stream(**stream_kwargs)
+                async for chunk in audio_stream:
+                    if chunk:
+                        yield chunk
                 return
             except Exception as e:
                 err_msg = str(e)
@@ -97,14 +134,18 @@ class ElevenLabsProvider(BaseTTS):
                     )
                     await asyncio.sleep(1.0)
                     continue
-                raise VoiceProviderError(f"ElevenLabs synthesis failed: {e}") from e
+                raise VoiceProviderError(f"ElevenLabs streaming synthesis failed: {e}") from e
 
     async def list_voices(self) -> list[VoiceInfo]:
+        if self._cached_voices is not None:
+            return self._cached_voices
         try:
             response = await self._client.voices.get_all()
+            self._cached_voices = [
+                VoiceInfo(id=voice.voice_id, name=getattr(voice, "name", "") or voice.voice_id)
+                for voice in response.voices
+            ]
+            return self._cached_voices
         except Exception as e:
-            raise VoiceProviderError(f"Failed to list ElevenLabs voices: {e}") from e
-        return [
-            VoiceInfo(id=voice.voice_id, name=getattr(voice, "name", "") or voice.voice_id)
-            for voice in response.voices
-        ]
+            logger.warning(f"Failed to list ElevenLabs voices: {e}")
+            return []

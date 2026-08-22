@@ -68,18 +68,17 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 
 ## Features
 
+- **Interactive First-Time Setup Wizard** — Interactive onboarding CLI (`python setup.py` or `jarvis --setup`) with live API key testing, model validation, and offline embedding initialization.
+- **OAuth 2.0 Loopback & Personal Service Auth** — Native browser OAuth 2.0 flow for Google (Gmail & Google Calendar) and Telethon MTProto authentication for personal Telegram accounts via `jarvis --connect <service>`.
 - **Autonomous PC Control & Desktop Automation** — Execute multi-step desktop workflows (`/automate <goal>`), launch & control apps, browse websites, manage window layouts (snapping, maximizing), adjust system audio volume, and simulate mouse/keyboard with emergency abort failsafes (`Ctrl+Alt+Q`).
-- **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), API key connector (`Ctrl+A`), and voice controls.
-- **Messaging Connectors (Telegram & Discord)** — Run JARVIS as a 24/7 personal assistant on Telegram and Discord with channel/user allowlists, message chunking, typing indicators, and session persistence.
-- **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fallback routing upon API errors.
-- **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, and `system-architecture`.
-- **Full Function Calling & Tool Support** — Native tool use support across OpenAI, Anthropic, and Google Gemini APIs (with native `functionCall` and `functionResponse` payload structure).
-- **Multi-Tiered Memory & RAG** — Conversation history with automatic summarization, autonomous long-term fact extraction, and vector semantic search powered by ChromaDB.
-- **Built-in Tools & Security Sandbox** — Desktop tools (`app_control`, `browser_control`, `window_control`, `media_control`, `system_settings`, `input_simulation`, `automate_task`), filesystem tools, calculator, screenshot generator, and command runner operating inside a configurable security sandbox.
-- **Native MCP Integration** — Direct integration with stdio and npx Model Context Protocol servers (Gmail, Calendar, Excel, Telegram, Terminal, Filesystem, Firecrawl, Vercel).
-- **Real-time Voice Mode** — Speech-to-text input paired with edge/ElevenLabs text-to-speech streaming for hands-free operation.
-- **Fully Configurable** — YAML (`~/.jarvis/config/jarvis.yaml` or `config/jarvis.yaml`), dynamic `models.dev` cache (`data/models_dev_cache.json`), and `.env` credentials.
-- **Docker Ready** — Containerized multi-stage Docker build and one-command Docker Compose stack.
+- **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), API key connector (`Ctrl+A`), MCP manager modal (`Ctrl+P` or `/mcp`), and voice controls.
+- **Dynamic Messaging Connectors (Telegram & Discord)** — Auto-discovered messaging bridges from `jarvis/connectors` and `~/.jarvis/connectors/` with channel/user allowlists, message chunking, typing indicators, and session persistence.
+- **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fault-tolerant fallback routing.
+- **Offline & Multi-Backend Vector Memory** — ChromaDB vector memory with bundled ONNX `all-MiniLM-L6-v2` offline embeddings (zero API key needed) and automatic remote-to-local fallback.
+- **Dynamic MCP Creator & Registry** — In-chat MCP tool generation and runtime server registration (`~/.jarvis/mcp/servers.json`) for npms, uvx, and python MCP servers.
+- **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, `frontend-design`, `create-mcp`, and `system-architecture`.
+- **Enhanced Voice Suite** — Streaming Edge TTS / ElevenLabs with automatic `<think>` tag stripping, multi-paragraph chunking, and configurable character limits (`max_speak_characters`).
+- **Fully Configurable & User-Isolated** — Runtime configurations saved in `~/.jarvis/config/jarvis.yaml`, tokens in `~/.jarvis/auth/tokens.json`, and API keys in `~/.jarvis/.env`.
 
 ---
 
@@ -99,11 +98,36 @@ python -m venv .venv
 
 # Install JARVIS core package
 pip install -e .
+```
 
-# Copy environment variable template
-copy .env.example .env          # Windows
-# cp .env.example .env          # Linux/Mac
-# Edit .env with your API keys!
+### First-Time Setup Wizard (Recommended)
+
+Run the interactive setup wizard to validate your API keys, test models, and configure embeddings:
+
+```bash
+# Run interactive setup wizard
+python setup.py
+# or
+python -m jarvis --setup
+```
+
+The wizard will:
+1. Validate your primary LLM provider key against live endpoints.
+2. Verify model compatibility and reasoning support.
+3. Test or download the offline local embedding model.
+4. Save your configuration to `~/.jarvis/config/jarvis.yaml` and `~/.jarvis/.env`.
+
+### Connecting Accounts & Services (OAuth & Telegram)
+
+Authenticate personal accounts with zero manual token copying:
+
+```bash
+# Connect Google Account (Gmail & Google Calendar) via browser OAuth 2.0
+python main.py --connect gmail
+python main.py --connect calendar
+
+# Connect Personal Telegram Account (MTProto User API)
+python main.py --connect telegram
 ```
 
 ### Optional Installation Extras
@@ -310,17 +334,12 @@ tools:
 
 ## MCP (Model Context Protocol) Ecosystem
 
-JARVIS features native Model Context Protocol support out-of-the-box:
-
-| Server | Transport | Description | Status |
-| --- | --- | --- | --- |
-| 📧 **Gmail** | `stdio` | Send, read, search emails, and manage message threads | Built-in |
-| 📅 **Calendar** | `stdio` | Manage events, meetings, schedules, and reminders | Built-in |
-| 📊 **Excel** | `stdio` | Read, edit, format, and analyze `.xlsx` spreadsheets | Built-in |
-| 💬 **Telegram** | `stdio` | Send and receive Telegram chat messages | Built-in |
-| 🖥️ **Terminal** | `stdio` | Inspect system processes and run shell commands | Built-in |
-| 🔍 **Firecrawl** | `stdio (npx)` | Real-time web scraping, crawling, and search | External |
-| 🚀 **Vercel** | `stdio (npx)` | Manage deployments, domains, and analytics | External |
+JARVIS follows the standard industry architecture (like Cursor, Claude Desktop, and Cline) for Model Context Protocol:
+- **Clean & Zero Overhead**: Zero pre-installed background server processes. Your context window and memory start clean and fast.
+- **Dynamic Marketplace Discovery**: Integrated with **[mcpmarket.com](https://mcpmarket.com/)** and NPM/GitHub registries. Ask JARVIS to find any tool integration (`find_mcp`), and JARVIS will retrieve the command, check required API keys, and install it on the fly.
+- **Interactive TUI Modal (`Ctrl+P` / `/mcp`)**: View all connected tools and resources with a clean interface.
+- **1-Click Connect (`Ctrl+A`)**: Press `Ctrl+A` or `A` anywhere in the MCP modal to open the **Add MCP Server** dialog to connect servers via `npx`, `uvx`, `python`, `SSE`, or `HTTP`.
+- **Specialized `find-mcp` Skill**: Guides JARVIS to autonomously search registries, inspect tool requirements, ask you for necessary credentials, and register servers.
 
 ---
 

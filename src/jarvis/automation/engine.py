@@ -5,7 +5,8 @@ Automation Engine — Lifecycle Manager for Desktop Automation & Computer Contro
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from jarvis.automation.agent import AutomationAgent
 from jarvis.automation.controller import DesktopController

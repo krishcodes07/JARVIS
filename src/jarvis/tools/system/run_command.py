@@ -15,10 +15,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from jarvis.core.config import PROJECT_ROOT
 from jarvis.core.paths import get_cache_dir
 from jarvis.tools.base import BaseTool, ToolParameter, ToolSchema, truncate_output
-from jarvis.tools.sandbox import CommandPolicy, PathSandbox
+from jarvis.tools.sandbox import CommandPolicy
 
 logger = logging.getLogger(__name__)
 

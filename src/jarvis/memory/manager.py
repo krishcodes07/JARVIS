@@ -22,6 +22,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _score_of(entry: dict[str, Any]) -> float:
+    """Relevance score of a recall hit, defaulting to 0.0 when unscored."""
+    score = entry.get("score")
+    return float(score) if isinstance(score, (int, float)) else 0.0
+
+
 class MemoryManager:
     """Unified memory manager for all memory types.
 
@@ -48,8 +54,31 @@ class MemoryManager:
         self.vector: VectorStore | None = None
         self._provider_source: Callable[[], Any] | None = None
         self._provider_manager: Any | None = None
-        self._extraction_provider: Any | None = None
-        self._extraction_provider_resolved: bool = False
+        self._extraction_target: tuple[Any, str] | None = None
+        self._extraction_error: str | None = None
+
+    @property
+    def extraction_error(self) -> str | None:
+        """Why the last long-term extraction failed, if it did."""
+        return self._extraction_error
+
+    def status(self) -> dict[str, Any]:
+        """Return a health summary of every memory subsystem, for logs and the UI."""
+        embedder = self.embedder
+        return {
+            "conversation": self.conversation is not None,
+            "long_term": {
+                "enabled": self.long_term is not None,
+                "provider": self.config.memory.long_term.provider
+                or self.config.provider.active,
+                "model": self._get_extraction_model() if self.long_term else "",
+                "last_error": self._extraction_error,
+            },
+            "vector": {
+                "enabled": self.vector is not None,
+                "embedding": embedder.describe() if embedder is not None else None,
+            },
+        }
 
     def set_provider_source(self, source: Callable[[], Any]) -> None:
         """Provide a callable that returns the active LLM provider.
@@ -72,24 +101,56 @@ class MemoryManager:
         """
         self._provider_manager = manager
 
-    def _get_extraction_provider(self) -> Any:
-        """Return the provider used for long-term memory extraction.
+    def _get_extraction_target(self) -> tuple[Any, str]:
+        """Resolve the provider *and* model for long-term extraction together.
 
-        Uses ``memory.long_term.provider`` if set (cached), otherwise the
-        active chat provider.
+        Provider and model must be resolved as a pair: falling back to the
+        active chat provider while keeping ``memory.long_term.model`` (which
+        belongs to a different provider) produces an unknown-model API error on
+        every extraction.
+
+        Returns:
+            ``(provider, model)``; provider is ``None`` when none is usable.
         """
+        if self._extraction_target is not None:
+            return self._extraction_target
+
         ltm = self.config.memory.long_term
-        if ltm.provider and self._provider_manager and not self._extraction_provider_resolved:
-            self._extraction_provider = self._provider_manager.get_provider(ltm.provider)
-            self._extraction_provider_resolved = True
-        if self._extraction_provider is not None:
-            return self._extraction_provider
-        return self._provider_source() if self._provider_source else None
+        target: tuple[Any, str] | None = None
+
+        if ltm.provider and self._provider_manager:
+            provider = self._provider_manager.get_provider(ltm.provider)
+            if provider is not None:
+                target = (provider, ltm.model or self.config.provider.model)
+            else:
+                logger.warning(
+                    "Long-term memory provider '%s' has no API key configured; "
+                    "using the active chat provider and model instead.",
+                    ltm.provider,
+                )
+
+        if target is None:
+            provider = self._provider_source() if self._provider_source else None
+            active_name = getattr(self._provider_manager, "active_name", "")
+            # Keep the configured model only if it belongs to the active provider.
+            model = (
+                ltm.model
+                if ltm.model and ltm.provider and ltm.provider == active_name
+                else self.config.provider.model
+            )
+            target = (provider, model)
+
+        if target[0] is not None:
+            self._extraction_target = target
+        return target
+
+    def _get_extraction_provider(self) -> Any:
+        """Return the provider used for long-term memory extraction."""
+        return self._get_extraction_target()[0]
 
     def _get_extraction_model(self) -> str:
         """Return the model used for long-term memory extraction."""
-        ltm = self.config.memory.long_term
-        return ltm.model or self.config.provider.model
+        return self._get_extraction_target()[1]
 
     async def initialize(self) -> None:
         """Initialize all enabled memory backends."""
@@ -109,15 +170,17 @@ class MemoryManager:
             from jarvis.memory.vector.embedder import Embedder
             from jarvis.memory.vector.store import VectorStore
 
+            vcfg = self.config.memory.vector
             embedder = Embedder(
-                model=self.config.memory.vector.embedding_model,
-                preferred_provider=self.config.memory.vector.embedding_provider,
+                model=vcfg.embedding_model,
+                preferred_provider=vcfg.embedding_provider,
                 provider_manager=self._provider_manager,
                 provider_source=self._provider_source,
+                backend=vcfg.embedding_backend,
             )
-            self.vector = VectorStore(self.config.memory.vector, embedder)
+            self.vector = VectorStore(vcfg, embedder)
             await self.vector.initialize()
-            logger.info("Vector memory initialized.")
+            logger.info("Vector memory initialized (%s).", embedder.describe())
 
     async def add_message(
         self,
@@ -148,24 +211,61 @@ class MemoryManager:
         query: str | None = None,
         max_results: int = 5,
     ) -> dict[str, Any]:
+        """Assemble conversation history plus recalled long-term memories.
+
+        Long-term recall merges semantic (vector) hits with keyword hits from
+        the fact store. Vector search returns an empty list rather than raising
+        when embeddings are unavailable, so relying on it alone would silently
+        yield no memories at all; the keyword store always contributes.
+
+        Args:
+            session_id: The session identifier.
+            query: The current user query driving recall.
+            max_results: Maximum long-term memories to return.
+
+        Returns:
+            Dict with ``conversation`` and, when a query is given, ``long_term``.
+        """
         context: dict[str, Any] = {}
 
         if self.conversation:
             context["conversation"] = await self.conversation.retrieve(session_id)
 
         if self.long_term and query:
-            # Prefer semantic (vector) retrieval for long-term memory since it
-            # grows over time; fall back to keyword matching without vectors.
-            if self.vector:
-                try:
-                    context["long_term"] = await self.vector.search(query, max_results)
-                except Exception as e:
-                    logger.warning(f"Vector memory search failed: {e}")
-                    context["long_term"] = await self.long_term.retrieve(query)
-            else:
-                context["long_term"] = await self.long_term.retrieve(query)
+            context["long_term"] = await self._recall_long_term(query, max_results)
 
         return context
+
+    async def _recall_long_term(self, query: str, max_results: int) -> list[dict[str, Any]]:
+        """Recall long-term memories via vector search merged with keyword search."""
+        results: list[dict[str, Any]] = []
+
+        if self.vector:
+            try:
+                results.extend(await self.vector.search(query, max_results))
+            except Exception as e:
+                logger.warning(f"Vector memory search failed: {e}")
+
+        if self.long_term:
+            try:
+                results.extend(await self.long_term.retrieve(query, max_results))
+            except Exception as e:
+                logger.warning(f"Long-term keyword search failed: {e}")
+
+        # Dedupe on content (the same fact is stored in both backends), keeping
+        # the highest-scoring copy, then return the strongest matches overall.
+        best: dict[str, dict[str, Any]] = {}
+        for entry in results:
+            content = str(entry.get("content", "")).strip()
+            if not content:
+                continue
+            key = content.lower()
+            previous = best.get(key)
+            if previous is None or _score_of(entry) > _score_of(previous):
+                best[key] = entry
+
+        ranked = sorted(best.values(), key=_score_of, reverse=True)
+        return ranked[: max(1, max_results)]
 
     async def store_vector(self, content: str, metadata: dict[str, Any] | None = None) -> None:
         """Store a document in vector memory for semantic retrieval.
@@ -197,10 +297,10 @@ class MemoryManager:
         if not self.vector:
             return 0
 
-        from jarvis.core.config import PROJECT_ROOT
+        from jarvis.core.paths import resolve_data_path
         from jarvis.memory.vector.indexer import DocumentIndexer
 
-        kb_dir = PROJECT_ROOT / self.config.memory.vector.knowledge_base_path
+        kb_dir = resolve_data_path(self.config.memory.vector.knowledge_base_path)
         if not kb_dir.exists():
             return 0
 
@@ -258,12 +358,20 @@ class MemoryManager:
         if not self.long_term:
             return []
 
-        provider = self._get_extraction_provider()
+        provider, model = self._get_extraction_target()
         if provider is None:
-            logger.debug("No provider available for memory extraction; skipping.")
+            self._extraction_error = (
+                "No LLM provider is available for long-term memory extraction. "
+                "Configure an API key for the active provider or set "
+                "memory.long_term.provider."
+            )
+            logger.warning(self._extraction_error)
             return []
 
-        from jarvis.memory.long_term.extractor import MemoryExtractor
+        from jarvis.memory.long_term.extractor import (
+            MemoryExtractionError,
+            MemoryExtractor,
+        )
 
         existing = [
             m.get("content", "")
@@ -271,8 +379,22 @@ class MemoryManager:
             if m.get("content")
         ]
 
-        extractor = MemoryExtractor(provider, model=self._get_extraction_model())
-        memories = await extractor.extract(messages, existing_memories=existing)
+        extractor = MemoryExtractor(provider, model=model)
+        try:
+            memories = await extractor.extract(messages, existing_memories=existing)
+        except MemoryExtractionError as e:
+            # Surface rather than swallow: a wrong model id here makes long-term
+            # memory silently never store anything.
+            self._extraction_error = str(e)
+            logger.error(
+                "Long-term memory extraction is failing (provider=%s, model=%s): %s",
+                self.config.memory.long_term.provider or self.config.provider.active,
+                model,
+                e,
+            )
+            return []
+
+        self._extraction_error = None
 
         for memory in memories:
             key = memory.get("key") or memory.get("content", "")[:80]

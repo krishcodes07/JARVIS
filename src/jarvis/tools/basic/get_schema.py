@@ -29,7 +29,7 @@ class GetSchemaTool(BaseTool):
             ToolParameter(
                 name="tool_names",
                 type="array",
-                description="List of tool names (or comma-separated string of tool names) to retrieve schemas for.",
+                description="List of tool names to retrieve parameter schemas for.",
                 required=True,
             )
         ],
@@ -67,12 +67,15 @@ class GetSchemaTool(BaseTool):
             from jarvis.mcp.platform.registry import platform_registry
 
             for tool in platform_registry.tools.values():
-                mcp_registry[tool.qualified_name] = {
+                info = {
                     "name": tool.qualified_name,
                     "description": tool.description,
                     "parameters": tool.input_schema or {"type": "object", "properties": {}},
                     "server": tool.server_name,
                 }
+                mcp_registry[tool.qualified_name] = info
+                if tool.name not in mcp_registry:
+                    mcp_registry[tool.name] = info
         except Exception as e:
             logger.debug("Failed to read MCP platform registry: %s", e)
 
@@ -91,7 +94,8 @@ class GetSchemaTool(BaseTool):
         for name, info in found_schemas.items():
             output_parts.append(f"### Schema for '{name}'")
             output_parts.append(f"Description: {info.get('description', '')}")
-            output_parts.append(f"Parameters Schema:\n```json\n{json.dumps(info.get('parameters', {}), indent=2)}\n```\n")
+            formatted_params = json.dumps(info.get("parameters", {}), indent=2)
+            output_parts.append(f"Parameters Schema:\n```json\n{formatted_params}\n```\n")
 
         if missing_names:
             output_parts.append(f"Note: Could not find schema(s) for: {', '.join(missing_names)}")

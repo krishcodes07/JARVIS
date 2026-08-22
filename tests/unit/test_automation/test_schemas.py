@@ -4,17 +4,13 @@ Unit tests for automation schemas and models.
 
 from __future__ import annotations
 
-import pytest
-
 from jarvis.automation.schemas import (
     ActionType,
     AutomationAction,
     AutomationGoal,
     AutomationGoalStatus,
-    AutomationObservation,
     AutomationStep,
     UIElementInfo,
-    WindowInfo,
 )
 
 

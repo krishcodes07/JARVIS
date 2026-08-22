@@ -44,14 +44,14 @@ class ConversationView(QScrollArea):
     def apply_theme(self, theme: Theme) -> None:
         self.theme = theme
         self.setStyleSheet(
-            f"""
-            QScrollArea {{
+            """
+            QScrollArea {
                 background: transparent;
                 border: none;
-            }}
-            QWidget#ConversationContainer {{
+            }
+            QWidget#ConversationContainer {
                 background: transparent;
-            }}
+            }
             """
         )
 

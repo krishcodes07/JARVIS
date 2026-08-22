@@ -35,30 +35,34 @@ JARVIS is built as a modular, production-grade AI assistant package with a clean
 
 ## Subsystems Detail
 
-- **Core Engine (`src/jarvis/core`)**: Manages the event bus, session state, application lifecycle, error handling, and multi-location configuration loading (`~/.jarvis/config/jarvis.yaml` and `config/jarvis.yaml`).
-- **Messaging Connectors (`src/jarvis/connectors`)**: Multi-platform chat bridges (Telegram, Discord) enabling 24/7 conversational assistant interaction with user/channel allowlists, bot commands (`/session`, `/new`, `/clear`, `/status`, `/help`), and standalone background execution.
-- **Provider Manager (`src/jarvis/providers`)**: Handles API authentication, message streaming, token budgets, and fallback provider routing across 180+ LLM providers via `models.dev` catalog (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.).
-- **Skills Subsystem (`src/jarvis/skills`)**: Pluggable autonomous skills for coding, bug hunting, code review, data analysis, deep research, and system architecture.
+- **Core Engine (`src/jarvis/core`)**: Manages the event bus, session state, application lifecycle, error handling, and user-isolated configuration (`~/.jarvis/config/jarvis.yaml`).
+- **Setup & Validation (`src/jarvis/setup`)**: Interactive onboarding wizard validating live provider endpoints, testing models without token costs, and verifying offline vector embeddings.
+- **Authentication & OAuth Loopback (`src/jarvis/mcp/auth`)**: RFC 8252 compliant native browser OAuth 2.0 loopback server with PKCE (for Google Gmail and Calendar) and persistent encrypted token management (`~/.jarvis/auth/tokens.json`).
+- **Messaging Connectors (`src/jarvis/connectors`)**: Auto-discovered multi-platform chat bridges (Telegram, Discord, and user-defined packages in `~/.jarvis/connectors/`) enabling 24/7 assistant operation with allowlists, slash commands, and standalone runner mode.
+- **Provider Manager (`src/jarvis/providers`)**: Handles API authentication, message streaming, token budgets, and automated fallback routing across 180+ LLM providers via dynamic `models.dev` catalog integration.
+- **Skills Subsystem (`src/jarvis/skills`)**: Pluggable autonomous skills for coding, bug hunting, code review, data analysis, deep research, frontend design, MCP creation, and system architecture.
 - **Memory Manager (`src/jarvis/memory`)**:
   - **Conversation Memory**: Short-term session context with automatic summarization.
   - **Long-Term Memory**: Autonomous fact extraction and storage in JSON format.
-  - **Vector Memory**: Semantic search and document RAG powered by ChromaDB.
-- **Tool Engine (`src/jarvis/tools`)**: Includes basic utilities (calculator, clipboard, datetime, screenshot, url_reader), filesystem operations, and system control tools (`run_command`, `process_manager`, `system_info`) running inside an optional security sandbox.
-- **MCP Manager (`src/jarvis/mcp`)**: Native Client & Manager for standard Model Context Protocol servers (Gmail, Calendar, Excel, Telegram, Terminal, Filesystem, Firecrawl, Vercel).
-- **Voice Manager (`src/jarvis/voice`)**: Streaming text-to-speech (Edge TTS, ElevenLabs) and speech-to-text input (Google STT, Sphinx, Vosk, faster-whisper).
-- **UI Abstraction (`src/jarvis/ui`)**: Supports Textual-based TUI, FastAPI + WebSockets Web UI, and CustomTkinter/PySide6 Desktop GUI.
+  - **Vector Memory**: Semantic search powered by ChromaDB, supporting both remote embedding APIs and bundled offline ONNX `all-MiniLM-L6-v2` embeddings.
+- **Tool Engine (`src/jarvis/tools`)**: Includes basic utilities, desktop automation, dynamic MCP server creator (`mcp_creator`), filesystem operations, and system control tools running inside an optional security sandbox.
+- **MCP Subsystem (`src/jarvis/mcp`)**: Native Client & Manager for standard Model Context Protocol servers with dynamic registration and template generation.
+- **Voice Manager (`src/jarvis/voice`)**: Streaming text-to-speech (Edge TTS, ElevenLabs) with sentence/paragraph chunking and speech-to-text input (Google STT, Sphinx, Vosk, faster-whisper).
+- **UI Abstraction (`src/jarvis/ui`)**: Supports Textual-based TUI with in-app modals (Model Picker, API Key Connector, MCP Manager), FastAPI WebSockets Web UI, and Desktop GUI.
 
 ## Data Flow
 
 1. **User Input** → User Interface (TUI/Web/GUI) or Messaging Connector (Telegram/Discord) → Core Engine
-2. **Context Assembly** → Retrieve short-term history + query RAG/Vector memory + inject persona system prompt & active skills
-3. **LLM Invocation** → Provider Manager selects active model (or triggers fallback) → Stream responses
+2. **Context Assembly** → Retrieve short-term history + query RAG/Vector memory (local or remote) + inject persona system prompt & active skills
+3. **LLM Invocation** → Provider Manager selects active model (or triggers fallback) → Stream responses & extract `<think>` blocks
 4. **Tool / MCP Execution** → Parse function calls → Execute tool or MCP server operation → Return observation to LLM
 5. **Memory & UI Update** → Persist conversation & extracted facts → Render stream to UI / connector reply / audio output
 
 ## Key Design Decisions
 
-- **Protocol Adapter Pattern**: Shared protocol handlers (e.g. `openai.py`) support multiple compatible provider backends.
+- **Protocol Adapter Pattern**: Unified protocol handlers (`openai`, `anthropic`, `google`) power 180+ providers.
+- **Dynamic Plugin & Connector Discovery**: Connectors and tools are discovered from disk at runtime rather than hardcoded lists.
+- **Zero-Config Offline Embedding**: ChromaDB's bundled ONNX model is used when no remote embedding key is supplied.
+- **RFC 8252 OAuth Loopback**: Interactive native browser OAuth eliminates the need for manual API token pasting.
 - **Asynchronous Event Bus**: Decoupled, non-blocking communication between UIs, connectors, voice loop, engine, and tools.
-- **Zero-Code Provider Addition**: New OpenAI-compatible endpoints can be declared in `config/providers.json`.
-- **Hierarchical Configuration**: Config files support user-home seeding (`~/.jarvis/config/jarvis.yaml`), project fallbacks, and strict Pydantic v2 validation.
+- **User-Isolated Storage**: All credentials, tokens, and configs reside safely in the user's home directory (`~/.jarvis/`).

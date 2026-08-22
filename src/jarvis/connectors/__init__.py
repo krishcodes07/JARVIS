@@ -10,14 +10,14 @@ from jarvis.connectors.runner import run_connector_service
 from jarvis.connectors.telegram.connector import TelegramConnector
 
 __all__ = [
-    "BaseConnector",
     "BaseCommand",
+    "BaseConnector",
     "CommandContext",
     "CommandRegistry",
     "ConnectorManager",
+    "ConnectorStatus",
     "InboundMessage",
     "OutboundMessage",
-    "ConnectorStatus",
     "TelegramConnector",
     "run_connector_service",
 ]

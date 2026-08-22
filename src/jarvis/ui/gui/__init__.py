@@ -2,4 +2,4 @@
 
 from jarvis.ui.gui.app import GUIUI, run_gui
 
-__all__ = ["run_gui", "GUIUI"]
+__all__ = ["GUIUI", "run_gui"]

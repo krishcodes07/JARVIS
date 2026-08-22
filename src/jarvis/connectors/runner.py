@@ -23,7 +23,8 @@ async def run_connector_service(
 
     Args:
         config: Full JarvisConfig instance.
-        connector_name: Specific connector to run ('telegram', 'discord', or 'all'/None).
+        connector_name: Specific connector to run (a discovered connector name,
+            or 'all'/'auto'/None to run everything enabled in configuration).
     """
     from jarvis.connectors.manager import ConnectorManager
     from jarvis.core.engine import JarvisEngine
@@ -34,30 +35,28 @@ async def run_connector_service(
 
     manager = engine.connector_manager
     if manager is None:
-        from jarvis.connectors.manager import ConnectorManager
         manager = ConnectorManager(config, engine)
         engine.connector_manager = manager
 
     stop_event = asyncio.Event()
-
-    # Handle OS termination signals
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
-            loop.add_signal_handler(sig, stop_event.set)
-        except NotImplementedError:
-            # Signal handlers not fully supported on Windows event loops
-            pass
+    _install_stop_handlers(stop_event)
 
     try:
         if connector_name and connector_name.lower() not in ("all", "auto"):
             target = connector_name.lower()
             conn = manager.get(target)
-            if conn and not conn.is_running:
+            if conn is None:
+                available = ", ".join(c.name for c in manager.list_connectors()) or "none"
+                logger.error(
+                    "Connector '%s' is not available. Discovered connectors: %s",
+                    target,
+                    available,
+                )
+            elif conn.is_running:
+                logger.info(f"Connector '{target}' is already running.")
+            else:
                 logger.info(f"Launching target connector '{target}'...")
                 await manager.start_connector(target)
-            elif conn and conn.is_running:
-                logger.info(f"Connector '{target}' is already running.")
 
         running_connectors = manager.list_running()
         if not running_connectors:
@@ -78,3 +77,29 @@ async def run_connector_service(
         logger.info("Shutting down Connector Service...")
         await engine.shutdown()
         logger.info("Connector Service stopped.")
+
+
+def _install_stop_handlers(stop_event: asyncio.Event) -> None:
+    """Wire SIGINT/SIGTERM to *stop_event* on whatever platform we're on.
+
+    ``loop.add_signal_handler`` is unimplemented on Windows ProactorEventLoop, so
+    fall back to :func:`signal.signal`, scheduling the set thread-safely since
+    the handler runs outside the loop.
+    """
+    loop = asyncio.get_running_loop()
+
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stop_event.set)
+            continue
+        except (NotImplementedError, AttributeError, RuntimeError, ValueError):
+            pass
+
+        try:
+            signal.signal(
+                sig,
+                lambda _sig, _frame: loop.call_soon_threadsafe(stop_event.set),
+            )
+        except (ValueError, OSError, RuntimeError) as e:
+            # Not on the main thread, or the signal isn't supported here.
+            logger.debug("Could not install handler for %s: %s", sig, e)

@@ -5,8 +5,8 @@ Telegram Bot API Client — Lightweight async HTTP client using httpx.
 from __future__ import annotations
 
 import logging
-from typing import Any, cast
 from pathlib import Path
+from typing import Any, cast
 
 import httpx
 

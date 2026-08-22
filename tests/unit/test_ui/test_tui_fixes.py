@@ -47,7 +47,9 @@ import pytest
 @pytest.mark.asyncio
 async def test_prompt_input_text_area_submitted_event():
     from unittest.mock import MagicMock
+
     from textual.events import Key
+
     from jarvis.ui.tui.widgets.prompt_box import PromptInputTextArea
 
     area = PromptInputTextArea("Hello world")
@@ -84,13 +86,17 @@ def test_mcp_manager_available_servers_includes_registry_servers():
 
     config = JarvisConfig()
     mgr = MCPManager(config)
-    mgr.registry.load()
+    mgr.registry.register("custom-db", {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-postgres"],
+        "transport": "stdio",
+        "enabled": False,
+    })
 
     available = mgr.get_available_servers()
     server_names = [s["name"] for s in available]
 
-    assert "firecrawl-mcp" in server_names
-    assert "vercel" in server_names
+    assert "custom-db" in server_names
 
 def test_unregister_server_removes_tools_from_platform_registry():
     from jarvis.mcp.platform.models import RegisteredTool
@@ -114,6 +120,7 @@ def test_unregister_server_removes_tools_from_platform_registry():
 async def test_cancelled_stream_saves_partial_message():
     import asyncio
     from unittest.mock import AsyncMock, MagicMock
+
     from jarvis.core.engine import JarvisEngine
 
     engine = JarvisEngine()
@@ -151,7 +158,9 @@ async def test_cancelled_stream_saves_partial_message():
 
 def test_tab_key_prepends_slash_and_opens_popover():
     from unittest.mock import MagicMock
+
     from textual.events import Key
+
     from jarvis.ui.tui.screens.main_screen import MainScreen
 
     ms = MainScreen()
@@ -187,6 +196,7 @@ async def test_submit_prompt_blocked_while_generating():
 @pytest.mark.asyncio
 async def test_slash_command_executes_while_generating():
     from unittest.mock import AsyncMock
+
     from jarvis.ui.tui.screens.main_screen import MainScreen
 
     ms = MainScreen()
@@ -204,6 +214,7 @@ async def test_slash_command_executes_while_generating():
 @pytest.mark.asyncio
 async def test_copy_slash_command_silent():
     from unittest.mock import MagicMock
+
     from jarvis.ui.tui.screens.main_screen import MainScreen
 
     ms = MainScreen()
@@ -223,6 +234,7 @@ async def test_copy_slash_command_silent():
 @pytest.mark.asyncio
 async def test_clear_slash_command_shows_toast():
     from unittest.mock import AsyncMock, MagicMock
+
     from jarvis.ui.tui.screens.main_screen import MainScreen
 
     ms = MainScreen()
@@ -256,6 +268,7 @@ def test_notification_toast_widget():
 @pytest.mark.asyncio
 async def test_chat_view_tool_call_resets_current_assistant_widget():
     from textual.app import App
+
     from jarvis.ui.tui.widgets.chat_view import ChatViewWidget, MessageWidget, ToolCallWidget
 
     class TestApp(App):
@@ -297,7 +310,9 @@ async def test_chat_view_tool_call_resets_current_assistant_widget():
 @pytest.mark.asyncio
 async def test_pasted_text_badge_in_prompt_box():
     from unittest.mock import MagicMock
+
     from textual.widgets import TextArea
+
     from jarvis.ui.tui.app import JarvisTUIApp
     from jarvis.ui.tui.screens.main_screen import MainScreen
 
@@ -351,7 +366,9 @@ async def test_pasted_text_badge_in_prompt_box():
 @pytest.mark.asyncio
 async def test_prompt_history_up_down_navigation():
     from unittest.mock import MagicMock
+
     from textual.events import Key
+
     from jarvis.ui.tui.app import JarvisTUIApp
     from jarvis.ui.tui.screens.main_screen import MainScreen
 
@@ -391,6 +408,7 @@ async def test_prompt_history_up_down_navigation():
 @pytest.mark.asyncio
 async def test_voice_mode_auto_interrupt_on_submit():
     from unittest.mock import MagicMock
+
     from jarvis.ui.tui.app import JarvisTUIApp
     from jarvis.ui.tui.screens.main_screen import MainScreen
 
@@ -413,6 +431,7 @@ async def test_voice_mode_auto_interrupt_on_submit():
 @pytest.mark.asyncio
 async def test_voice_mode_auto_send_msg_false_populates_prompt_box():
     from unittest.mock import AsyncMock, MagicMock
+
     from jarvis.ui.tui.app import JarvisTUIApp
     from jarvis.ui.tui.screens.main_screen import MainScreen
 

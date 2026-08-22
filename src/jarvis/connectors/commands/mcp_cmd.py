@@ -5,7 +5,7 @@ MCP Command — Inspect, connect, and disconnect Model Context Protocol servers 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from jarvis.connectors.commands.models import BaseCommand, CommandContext
 from jarvis.mcp.platform.registry import platform_registry

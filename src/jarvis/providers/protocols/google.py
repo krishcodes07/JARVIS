@@ -451,7 +451,7 @@ class GoogleProvider(BaseProvider):
 
         for part in candidate.get("content", {}).get("parts", []):
             if "text" in part:
-                if part.get("thought") is True or "thought" in part and part.get("thought"):
+                if part.get("thought") is True or ("thought" in part and part.get("thought")):
                     content_parts.append(f"<think>\n{part['text']}\n</think>")
                 else:
                     content_parts.append(part["text"])

@@ -12,10 +12,10 @@ from jarvis.tools.desktop.window_control import WindowControlTool
 
 __all__ = [
     "AppControlTool",
+    "AutomateTaskTool",
     "BrowserControlTool",
-    "WindowControlTool",
+    "InputSimulationTool",
     "MediaControlTool",
     "SystemSettingsTool",
-    "InputSimulationTool",
-    "AutomateTaskTool",
+    "WindowControlTool",
 ]

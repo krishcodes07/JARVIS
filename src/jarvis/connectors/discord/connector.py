@@ -8,7 +8,7 @@ import asyncio
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -42,10 +42,14 @@ class DiscordConnector(BaseConnector):
 
     @property
     def is_enabled(self) -> bool:
-        """Check whether Discord connector is enabled in configuration."""
+        """Check whether Discord connector is enabled in configuration and has a bot token."""
         if not self.config or not hasattr(self.config, "connectors"):
             return False
-        return self.config.connectors.enabled and self.config.connectors.discord.enabled
+        return (
+            bool(self.config.connectors.enabled)
+            and bool(self.config.connectors.discord.enabled)
+            and bool(self._get_bot_token())
+        )
 
     def _get_bot_token(self) -> str:
         """Get Discord bot token from config or environment."""
@@ -98,10 +102,8 @@ class DiscordConnector(BaseConnector):
 
         token = self._get_bot_token()
         if not token:
-            raise ValueError(
-                "Discord bot token is not configured. Set 'connectors.discord.bot_token' "
-                "in jarvis.yaml or DISCORD_BOT_TOKEN environment variable."
-            )
+            logger.info("Discord connector skipped: DISCORD_BOT_TOKEN is not configured.")
+            return
 
         try:
             import discord
@@ -119,7 +121,7 @@ class DiscordConnector(BaseConnector):
         @self._client.event
         async def on_ready() -> None:
             self._running = True
-            self._connected_at = datetime.now(timezone.utc)
+            self._connected_at = datetime.now(UTC)
             self._bot_user = self._client.user
             logger.info(f"Connected to Discord Gateway as @{self._client.user} (ID: {self._client.user.id})")
             ready_event.set()
@@ -143,7 +145,7 @@ class DiscordConnector(BaseConnector):
             # Wait up to 20 seconds for on_ready to fire
             await asyncio.wait_for(ready_event.wait(), timeout=20.0)
             logger.info("Discord connector initialized and ready.")
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("Discord client connection timed out waiting for ready event. Continuing in background...")
 
     async def stop(self) -> None:

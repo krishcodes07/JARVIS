@@ -1,7 +1,7 @@
 """
 models.dev Integration — Loads, caches, and manages LLM provider metadata from models.dev database.
 
-Fetches 180+ providers and their model catalogs from https://models.dev/api.json and caches
+Fetches 190+ providers and their live model catalogs from https://models.dev/api.json and caches
 them locally in ~/.jarvis/workspace/cache/models_dev_cache.json.
 """
 
@@ -14,12 +14,12 @@ from typing import Any
 
 import httpx
 
-from jarvis.core.config import DATA_DIR
 from jarvis.core.constants import Protocol
+from jarvis.core.paths import get_cache_dir, get_jarvis_home
 
 logger = logging.getLogger(__name__)
 
-MODELS_DEV_CACHE_FILE = DATA_DIR / "cache" / "models_dev_cache.json"
+MODELS_DEV_CACHE_FILE = get_cache_dir() / "models_dev_cache.json"
 MODELS_DEV_URL = "https://models.dev/api.json"
 
 # Known default base URLs for standard providers when api field is null in models.dev
@@ -42,41 +42,55 @@ STANDARD_BASE_URLS: dict[str, str] = {
 
 
 def load_models_dev_cache() -> dict[str, Any]:
-    """Load models.dev catalog from local cache file if available."""
+    """Load models.dev catalog from local cache file.
+
+    If cache is missing or empty on first run, dynamically fetches it from models.dev API.
+    """
+    cache_file = get_cache_dir() / "models_dev_cache.json"
+
+    # 1. Try reading from local cache file
+    if cache_file.exists():
+        try:
+            with open(cache_file, encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, dict) and data:
+                    return data
+        except Exception as e:
+            logger.warning(f"Failed loading models.dev cache from {cache_file}: {e}")
+
+    # 2. If no cache yet (fresh user install), fetch directly from models.dev API
+    logger.info("Fetching models.dev catalog dynamically from https://models.dev/api.json...")
+    try:
+        with httpx.Client(
+            headers={"User-Agent": "JARVIS-AI-Assistant/1.0"},
+            timeout=10.0,
+            follow_redirects=True,
+        ) as client:
+            resp = client.get(MODELS_DEV_URL)
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and data:
+                save_models_dev_cache(data)
+                return data
+    except Exception as e:
+        logger.warning(f"Initial live fetch from models.dev failed ({e}); checking fallback locations.")
+
+    # 3. Check legacy/fallback locations if offline on first run
     from jarvis.core.config import PROJECT_ROOT
-
-    if MODELS_DEV_CACHE_FILE.exists():
-        try:
-            with open(MODELS_DEV_CACHE_FILE, encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict) and data:
-                    return data
-        except Exception as e:
-            logger.warning(f"Failed loading models.dev cache from {MODELS_DEV_CACHE_FILE}: {e}")
-
-    # Check legacy user workspace location (~/.jarvis/workspace/models_dev_cache.json)
-    legacy_user_cache = DATA_DIR / "models_dev_cache.json"
-    if legacy_user_cache.exists():
-        try:
-            with open(legacy_user_cache, encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict) and data:
-                    save_models_dev_cache(data)
-                    return data
-        except Exception as e:
-            logger.warning(f"Failed loading legacy models.dev cache from {legacy_user_cache}: {e}")
-
-    # Fallback to repo data catalog file
-    repo_cache = PROJECT_ROOT / "data" / "models_dev_cache.json"
-    if repo_cache.exists():
-        try:
-            with open(repo_cache, encoding="utf-8") as f:
-                data = json.load(f)
-                if isinstance(data, dict) and data:
-                    save_models_dev_cache(data)
-                    return data
-        except Exception as e:
-            logger.warning(f"Failed loading fallback models.dev cache from {repo_cache}: {e}")
+    fallback_locations = [
+        get_jarvis_home() / "workspace" / "models_dev_cache.json",
+        PROJECT_ROOT / "data" / "models_dev_cache.json",
+    ]
+    for p in fallback_locations:
+        if p.exists():
+            try:
+                with open(p, encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, dict) and data:
+                        save_models_dev_cache(data)
+                        return data
+            except Exception:
+                pass
 
     return {}
 
@@ -84,10 +98,11 @@ def load_models_dev_cache() -> dict[str, Any]:
 def save_models_dev_cache(data: dict[str, Any]) -> None:
     """Save models.dev data to local cache file in ~/.jarvis/workspace/cache/models_dev_cache.json."""
     try:
-        MODELS_DEV_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(MODELS_DEV_CACHE_FILE, "w", encoding="utf-8") as f:
+        cache_file = get_cache_dir() / "models_dev_cache.json"
+        cache_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(cache_file, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        logger.info(f"Saved models.dev catalog ({len(data)} providers) to {MODELS_DEV_CACHE_FILE}")
+        logger.info(f"Saved models.dev catalog ({len(data)} providers) to {cache_file}")
     except Exception as e:
         logger.warning(f"Failed to save models.dev cache: {e}")
 
@@ -172,15 +187,10 @@ def format_env_var_label(env_var: str) -> str:
 
 
 def is_provider_connected(provider_id: str, provider_data: dict[str, Any] | None = None) -> bool:
-    """Check whether all required API keys/env vars for the provider are set and non-empty in os.environ or .env."""
+    """Check whether all required API keys/env vars for the provider are set and non-empty in os.environ or ~/.jarvis/.env."""
     from dotenv import load_dotenv
-    from jarvis.core.config import PROJECT_ROOT, get_jarvis_home
 
-    repo_env = PROJECT_ROOT / ".env"
     home_env = get_jarvis_home() / ".env"
-
-    if repo_env.exists():
-        load_dotenv(repo_env)
     if home_env.exists():
         load_dotenv(home_env, override=True)
 
@@ -236,6 +246,124 @@ def get_provider_protocol(provider_id: str, provider_data: dict[str, Any]) -> Pr
     return Protocol.OPENAI
 
 
+# ─── Embedding capability detection ──────────────────────────
+
+# Substrings that identify an embedding model by name/family. models.dev has no
+# explicit "embedding" flag, so naming is the highest-precision signal available.
+_EMBEDDING_NAME_HINTS = (
+    "embed",
+    "bge-",
+    "bge_",
+    "e5-",
+    "e5_",
+    "gte-",
+    "gte_",
+    "minilm",
+    "mini_lm",
+)
+
+
+def is_embedding_model(model_id: str, model_info: dict[str, Any] | None = None) -> bool:
+    """Return True if a models.dev entry describes a text-embedding model.
+
+    Uses two independent signals, since models.dev exposes no explicit flag:
+
+    1. **Naming** — the id, family, name or description mentions a known
+       embedding architecture (``text-embedding-3-small``, ``bge-m3``, ``e5``…).
+    2. **Shape** — embedding endpoints bill nothing per output token and support
+       neither ``temperature`` nor tool calling. Used only to corroborate a
+       naming hit, because a handful of guard/moderation models share the shape.
+
+    Args:
+        model_id: The model identifier.
+        model_info: The models.dev entry for that model, when available.
+
+    Returns:
+        True if the model should be treated as an embedding model.
+    """
+    if not model_id:
+        return False
+
+    info = model_info if isinstance(model_info, dict) else {}
+
+    haystack = " ".join(
+        str(part).lower()
+        for part in (
+            model_id,
+            info.get("id", ""),
+            info.get("family", ""),
+            info.get("name", ""),
+            info.get("description", ""),
+        )
+        if part
+    )
+    name_hit = any(hint in haystack for hint in _EMBEDDING_NAME_HINTS)
+    if not name_hit:
+        return False
+
+    # A naming hit alone is enough when we have no metadata to check against.
+    if not info:
+        return True
+
+    # Reject a naming hit that clearly behaves like a chat model (e.g. a chat
+    # model whose description merely mentions embeddings).
+    if info.get("tool_call") is True or info.get("reasoning") is True:
+        return False
+
+    return True
+
+
+def get_embedding_models(
+    provider_id: str, provider_data: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Return only the embedding models offered by a provider.
+
+    Args:
+        provider_id: The provider identifier.
+        provider_data: The provider's models.dev entry, loaded from cache if omitted.
+
+    Returns:
+        Mapping of model id to its models.dev entry, empty if the provider
+        offers no embedding models.
+    """
+    if provider_data is None:
+        provider_data = load_models_dev_cache().get(provider_id, {})
+
+    models = (provider_data or {}).get("models") or {}
+    if not isinstance(models, dict):
+        return {}
+
+    return {
+        mid: minfo
+        for mid, minfo in models.items()
+        if is_embedding_model(mid, minfo if isinstance(minfo, dict) else None)
+    }
+
+
+def provider_supports_embeddings(
+    provider_id: str, provider_data: dict[str, Any] | None = None
+) -> bool:
+    """Return True if a provider offers at least one embedding model."""
+    return bool(get_embedding_models(provider_id, provider_data))
+
+
+def list_embedding_providers(cache: dict[str, Any] | None = None) -> list[str]:
+    """List every provider in the catalog that offers embedding models.
+
+    Args:
+        cache: A pre-loaded models.dev catalog, loaded from disk if omitted.
+
+    Returns:
+        Sorted provider ids.
+    """
+    if cache is None:
+        cache = load_models_dev_cache()
+
+    return sorted(
+        pid for pid, pdata in cache.items() if get_embedding_models(pid, pdata)
+    )
+
+
 def get_model_context_limit(model_id: str, provider_id: str | None = None) -> int:
     """Get context window limit for a model from models.dev cache.
 
@@ -277,4 +405,3 @@ def get_model_context_limit(model_id: str, provider_id: str | None = None) -> in
                     return int(ctx)
 
     return 128000
-

@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 from textual import work
 
+
 class SessionModal(ModalScreen[str | None]):
     """Modal dialog for session management, searching, and switching."""
 
@@ -157,11 +158,11 @@ class SessionModal(ModalScreen[str | None]):
                 try:
                     main_screen = self.app.screen
                     if hasattr(main_screen, "chat_view"):
-                        getattr(main_screen, "chat_view").clear_messages()
+                        main_screen.chat_view.clear_messages()
                     if hasattr(main_screen, "header"):
-                        getattr(main_screen, "header").show_header()
+                        main_screen.header.show_header()
                     if hasattr(main_screen, "prompt_box"):
-                        getattr(main_screen, "prompt_box").show_hints()
+                        main_screen.prompt_box.show_hints()
                     toast_fn = getattr(main_screen, "show_toast", None)
                     if toast_fn:
                         toast_fn(

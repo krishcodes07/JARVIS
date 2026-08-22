@@ -68,7 +68,7 @@ class ConfigModal(ModalScreen[None]):
     }
     """
 
-    def __init__(self, engine: "JarvisEngine | None" = None, **kwargs) -> None:
+    def __init__(self, engine: JarvisEngine | None = None, **kwargs) -> None:
         super().__init__(**kwargs)
         self.engine = engine
 

@@ -30,6 +30,17 @@ def parse_args() -> argparse.Namespace:
         help="Run messaging connector bridge in standalone service mode (e.g. telegram, all)",
     )
     parser.add_argument(
+        "--connect",
+        type=str,
+        default=None,
+        help="Authenticate and connect a service (e.g. telegram, gmail)",
+    )
+    parser.add_argument(
+        "--setup",
+        action="store_true",
+        help="Run interactive first-time setup and onboarding wizard",
+    )
+    parser.add_argument(
         "--config",
         type=str,
         default=None,
@@ -61,6 +72,16 @@ async def _run(args: argparse.Namespace) -> None:
     """Main async entry point."""
     from jarvis.core.config import JarvisConfig
     from jarvis.core.logger import setup_logging
+    from jarvis.core.paths import get_jarvis_home
+
+    user_cfg_file = get_jarvis_home() / "config" / "jarvis.yaml"
+
+    # Run setup wizard if requested or on fresh installation
+    if args.setup or (not user_cfg_file.exists() and sys.stdin.isatty()):
+        from jarvis.setup.wizard import run_setup_wizard
+        success = await run_setup_wizard()
+        if args.setup or not success:
+            return
 
     # Load config
     config_path = args.config
@@ -73,6 +94,22 @@ async def _run(args: argparse.Namespace) -> None:
     # Setup logging
     log_level = "DEBUG" if args.debug else config.jarvis.log_level
     setup_logging(level=log_level)
+
+    # Handle --connect service authentication
+    if args.connect:
+        target = args.connect.strip().lower()
+        if target in ("google", "gmail"):
+            from jarvis.mcp.auth.oauth import GoogleOAuthHelper
+            print(f"\n🌐 Opening browser for Google ({target}) OAuth login...")
+            res = await GoogleOAuthHelper.start_browser_login()
+            email = res.get("email", "Google Account")
+            print(f"✅ Successfully authenticated {email}!")
+            print("Credentials saved permanently in ~/.jarvis/auth/tokens.json.\n")
+            return
+        else:
+            print(f"❌ Unknown service to connect: {args.connect}")
+            print("Supported services: google")
+            sys.exit(1)
 
     # Launch standalone connector if requested
     if args.connector:

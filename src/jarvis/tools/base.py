@@ -7,16 +7,15 @@ Tools are auto-discovered by the ToolRegistry.
 
 from __future__ import annotations
 
+import difflib
 import logging
+import os
+import tempfile
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
-
-import difflib
-import os
-import tempfile
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -173,10 +172,17 @@ class BaseTool(ABC):
     """Abstract base class for all JARVIS tools."""
 
     schema: ToolSchema
+    config: Any = None
+    engine: Any = None
+    _provider_manager: Any = None
 
     def configure(self, config: Any) -> None:
         """Called once after instantiation with the loaded JarvisConfig."""
-        self.config: Any = config
+        self.config = config
+
+    def set_provider_manager(self, provider_manager: Any) -> None:
+        """Set or update the LLM provider manager."""
+        self._provider_manager = provider_manager
 
     def resolve_path(self, path: str | Path) -> Path:
         """Resolve a path against the sandbox if enabled, or return absolute path."""

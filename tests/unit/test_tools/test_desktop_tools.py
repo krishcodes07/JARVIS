@@ -4,11 +4,11 @@ Unit tests for Discrete Desktop Tools.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
+
 import pytest
 
 from jarvis.tools.desktop.app_control import AppControlTool
-from jarvis.tools.desktop.automate_task import AutomateTaskTool
 from jarvis.tools.desktop.browser_control import BrowserControlTool
 from jarvis.tools.desktop.input_simulation import InputSimulationTool
 from jarvis.tools.desktop.media_control import MediaControlTool

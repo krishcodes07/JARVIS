@@ -10,12 +10,11 @@ Provides reliable low-level execution primitives for Windows automation:
 
 from __future__ import annotations
 
-import asyncio
 import ctypes
 import logging
 import os
-from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -24,7 +23,6 @@ from typing import TYPE_CHECKING, Any
 from jarvis.automation.grounding.screen import ScreenManager
 from jarvis.automation.safety import SafetyGuard
 
-import shutil
 try:
     import winreg
 except ImportError:
@@ -228,9 +226,9 @@ class DesktopController:
             target_words = [target]
 
         try:
+            import psutil
             import win32gui
             import win32process
-            import psutil
         except Exception:
             return []
 
@@ -344,10 +342,10 @@ class DesktopController:
             return False
 
         try:
+            import psutil
             import win32con
             import win32gui
             import win32process
-            import psutil
 
             hwnds = self.find_windows(title_or_handle)
             if not hwnds:
@@ -587,10 +585,11 @@ class DesktopController:
             try:
                 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
             except ImportError:
-                from pycaw.utils import AudioUtilities  # type: ignore[no-redef]
                 from pycaw.pycaw import IAudioEndpointVolume  # type: ignore[no-redef]
+                from pycaw.utils import AudioUtilities  # type: ignore[no-redef]
 
-            from ctypes import cast, POINTER
+            from ctypes import POINTER, cast
+
             from comtypes import CLSCTX_ALL
 
             devices = AudioUtilities.GetSpeakers()
@@ -608,17 +607,18 @@ class DesktopController:
             try:
                 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
             except ImportError:
-                from pycaw.utils import AudioUtilities  # type: ignore[no-redef]
                 from pycaw.pycaw import IAudioEndpointVolume  # type: ignore[no-redef]
+                from pycaw.utils import AudioUtilities  # type: ignore[no-redef]
 
-            from ctypes import cast, POINTER
+            from ctypes import POINTER, cast
+
             from comtypes import CLSCTX_ALL
 
             devices = AudioUtilities.GetSpeakers()
             interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
             volume: Any = cast(interface, POINTER(IAudioEndpointVolume))
             scalar = volume.GetMasterVolumeLevelScalar()
-            return int(round(scalar * 100))
+            return round(scalar * 100)
         except Exception as e:
             logger.debug(f"pycaw get volume failed: {e}")
             return -1
@@ -629,10 +629,11 @@ class DesktopController:
             try:
                 from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
             except ImportError:
-                from pycaw.utils import AudioUtilities  # type: ignore[no-redef]
                 from pycaw.pycaw import IAudioEndpointVolume  # type: ignore[no-redef]
+                from pycaw.utils import AudioUtilities  # type: ignore[no-redef]
 
-            from ctypes import cast, POINTER
+            from ctypes import POINTER, cast
+
             from comtypes import CLSCTX_ALL
 
             devices = AudioUtilities.GetSpeakers()

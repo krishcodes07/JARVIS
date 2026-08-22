@@ -17,8 +17,8 @@ When JARVIS boots, configuration is discovered and loaded in the following order
 | **User Main Config** | `~/.jarvis/config/jarvis.yaml` | Core settings (provider selection, connectors, memory, tools, voice, UI options) |
 | **Repo Main Config** | `config/jarvis.yaml` | Workspace-level fallback settings |
 | **models.dev Cache** | `data/models_dev_cache.json` | Local cache of 180+ LLM providers and model catalogs from models.dev |
-| **MCP Servers Registry** | `src/jarvis/mcp/servers.json` | Registered MCP stdio and npx server command definitions |
-| **Environment Variables** | `.env` | Provider API keys, secret credentials, and private tokens |
+| **MCP Servers Registry** | `~/.jarvis/mcp/servers.json` | Registered MCP stdio, uvx, and npx server command definitions |
+| **Environment Variables** | `.env` / `~/.jarvis/.env` | Provider API keys, secret credentials, and private tokens |
 
 ---
 
@@ -65,7 +65,16 @@ Multi-platform chat bridge settings (Telegram, Discord):
 Multi-tiered memory system options:
 - `conversation`: Short-term chat history tracking & automatic summarization threshold (`summarize_after`).
 - `long_term`: Fact extraction settings (`auto_extract`, `provider`, `storage_path`).
-- `vector`: RAG storage settings (`backend`, `embedding_provider`, `embedding_model`, `storage_path`, `knowledge_base_path`).
+- `vector`: RAG vector memory settings:
+  - `enabled`: Toggle semantic vector memory.
+  - `backend`: Vector store backend (default: `chromadb`).
+  - `embedding_backend`: Embedding resolution mode (`auto`, `local`, `provider`):
+    - `auto`: Uses configured remote provider if valid; gracefully degrades to local ONNX model on failure.
+    - `local`: Always uses the offline bundled `all-MiniLM-L6-v2` ONNX model (no API key required).
+    - `provider`: Enforces remote API provider (e.g. OpenAI `/embeddings`).
+  - `embedding_provider`: Remote embedding provider (e.g. `openai`, `google`, `mistral`).
+  - `embedding_model`: Remote embedding model ID.
+  - `storage_path`: Vector database storage location.
 
 ### 5. `tools`
 Execution rules for built-in tools:
@@ -78,17 +87,30 @@ Execution rules for built-in tools:
 Model Context Protocol integration:
 - `enabled`: Toggle MCP server discovery and tool binding.
 - `auto_start`: List of server names to initialize automatically on startup.
-- `servers_config`: Path to `src/jarvis/mcp/servers.json`.
+- `servers_config`: Path to custom MCP catalog (defaults to bundled catalog).
+- `servers`: Per-server configuration and environment overrides.
 
 ### 7. `voice`
 Speech input and output settings:
 - `enabled`: Master switch for audio and voice loops.
 - `mode`: Operating mode (`text` or `voice`).
+- `max_speak_characters`: Maximum characters synthesized per turn (default: `10000`, `0` = unlimited).
 - `tts`: Provider (`edge_tts`, `elevenlabs`), active voice ID, rate, pitch, streaming flags.
 - `stt`: Provider (`sr`, `whisper`), engine (`google`, `sphinx`, `vosk`), sample rate, energy thresholds.
 
 ### 8. `ui`
 Default UI preference (`default: tui`) and theme configurations for `tui`, `web`, and `gui`.
+
+---
+
+## Authentication & Credentials Storage
+
+| Credential Type | Storage Path | Description |
+|-----------------|--------------|-------------|
+| **API Keys** | `~/.jarvis/.env` | Provider API keys (`GROQ_API_KEY`, `OPENAI_API_KEY`, etc.) |
+| **OAuth & User Tokens** | `~/.jarvis/auth/tokens.json` | Encrypted Google OAuth 2.0 and Telegram MTProto session tokens |
+| **User Dynamic MCP Servers** | `~/.jarvis/mcp/servers.json` | Dynamically created / installed MCP servers and credentials |
+| **models.dev Catalog** | `~/.jarvis/workspace/cache/models_dev_cache.json` | Cached providers and models catalog |
 
 ---
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -38,14 +38,14 @@ class UIConfig:
     particle_density: int = 62
 
     @classmethod
-    def load(cls, config_path: Path | str | None = None) -> "UIConfig":
+    def load(cls, config_path: Path | str | None = None) -> UIConfig:
         path = Path(config_path) if config_path else _find_jarvis_yaml()
         defaults = cls()
         if not path.exists():
             return defaults
 
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = yaml.safe_load(f) or {}
 
             gui_data = data.get("ui", {}).get("gui", {})
@@ -69,7 +69,7 @@ class UIConfig:
         try:
             data: dict[str, Any] = {}
             if path.exists():
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     data = yaml.safe_load(f) or {}
 
             if "ui" not in data or not isinstance(data["ui"], dict):

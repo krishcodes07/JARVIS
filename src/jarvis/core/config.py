@@ -19,7 +19,7 @@ from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def ensure_jarvis_home() -> Path:
 
     # Copy template config files from PROJECT_ROOT/config if missing in user home
     repo_config_dir = PROJECT_ROOT / "config"
-    for item in ["jarvis.yaml", "providers.json", "models.json"]:
+    for item in ["providers.json", "models.json"]:
         dst_file = config_dir / item
         if not dst_file.exists():
             src_file = repo_config_dir / item
@@ -79,24 +79,15 @@ def ensure_jarvis_home() -> Path:
                     logger.info(f"Initialized default config file {dst_file} from repository template.")
                 except Exception as e:
                     logger.warning(f"Failed to copy config template {src_file} to {dst_file}: {e}")
-            elif item == "jarvis.yaml":
-                try:
-                    JarvisConfig().save(dst_file)
-                except Exception as e:
-                    logger.warning(f"Failed to create default config file {dst_file}: {e}")
 
-    # Copy .env template to ~/.jarvis/.env if missing
+    # Create empty ~/.jarvis/.env if missing
     user_env_file = home_dir / ".env"
     if not user_env_file.exists():
-        repo_env = PROJECT_ROOT / ".env"
-        repo_env_example = PROJECT_ROOT / ".env.example"
-        src_env = repo_env if repo_env.exists() else (repo_env_example if repo_env_example.exists() else None)
-        if src_env:
-            try:
-                shutil.copy2(src_env, user_env_file)
-                logger.info(f"Initialized user environment file {user_env_file} from {src_env.name}.")
-            except Exception as e:
-                logger.warning(f"Failed to copy env template to {user_env_file}: {e}")
+        try:
+            user_env_file.write_text("", encoding="utf-8")
+            logger.info(f"Created empty user environment file {user_env_file}.")
+        except Exception as e:
+            logger.warning(f"Failed to create {user_env_file}: {e}")
 
     # Copy models_dev_cache.json from PROJECT_ROOT/data if missing in user workspace cache
     repo_cache_file = PROJECT_ROOT / "data" / "models_dev_cache.json"
@@ -177,8 +168,15 @@ class VectorMemoryConfig(BaseModel):
     """Vector / semantic memory settings."""
     enabled: bool = True
     backend: str = "chromadb"
-    embedding_provider: str = "openai"
-    embedding_model: str = "text-embedding-3-small"
+    # How embeddings are produced: "auto" prefers the configured provider and
+    # falls back to the bundled local model; "local" always uses the local model;
+    # "provider" requires the remote provider and errors instead of degrading.
+    embedding_backend: str = "auto"
+    # Empty provider/model means "use the bundled local model", which needs no
+    # API key. Only ~23 of the 190+ catalog providers expose an embeddings
+    # endpoint at all, so defaulting to a remote one breaks most fresh installs.
+    embedding_provider: str = ""
+    embedding_model: str = ""
     chunk_size: int = 512
     chunk_overlap: int = 50
     collection_name: str = "jarvis_memory"
@@ -195,7 +193,7 @@ class MemoryConfig(BaseModel):
 
 class SandboxConfig(BaseModel):
     """Sandbox settings for dangerous tool execution."""
-    enabled: bool = True
+    enabled: bool = False
     workspace: str = "."                    # Base directory for filesystem tools
     extra_paths: list[str] = Field(default_factory=list)  # Additional allowed roots
     blocked_commands: list[str] = Field(default_factory=list)  # Extra blocked command patterns
@@ -204,7 +202,7 @@ class SandboxConfig(BaseModel):
 class ToolsConfig(BaseModel):
     """Tool system settings."""
     enabled: bool = True
-    auto_approve: bool = False
+    auto_approve: bool = True
     max_turns: int = 25
     timeout: int = 30
     max_retries: int = 2
@@ -243,13 +241,36 @@ class SkillsConfig(BaseModel):
     disabled_skills: list[str] = Field(default_factory=list)
 
 
+class MCPServerOverride(BaseModel):
+    """Per-server overrides from ``jarvis.yaml`` → ``mcp.servers.<name>``.
+
+    Typed so the MCP manager can use attribute access safely: an untyped dict
+    here raised ``AttributeError`` during MCP init and disabled the whole
+    subsystem. ``None`` means "not overridden — inherit from the catalog entry
+    or the server manifest".
+    """
+    enabled: bool | None = None
+    transport: str | None = None
+    command: str | None = None
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    timeout: int | None = None
+    url: str | None = None
+    description: str | None = None
+
+    # Unknown keys are kept so a newer catalog field doesn't fail validation.
+    model_config = {"extra": "allow"}
+
+
 class MCPConfig(BaseModel):
     """MCP subsystem settings."""
     enabled: bool = True
     auto_start: list[str] = Field(default_factory=list)
     timeout: int = 90
-    servers_config: str = "src/jarvis/mcp/servers.json"
-    servers: dict[str, Any] = Field(default_factory=dict)
+    # "" = use the catalog shipped inside the jarvis.mcp package. A relative
+    # path resolves against the JARVIS data root, not the source tree.
+    servers_config: str = ""
+    servers: dict[str, MCPServerOverride] = Field(default_factory=dict)
 
 
 class TTSConfig(BaseModel):
@@ -262,6 +283,7 @@ class TTSConfig(BaseModel):
     pitch: str = "+0Hz"                        # edge_tts pitch
     stream: bool = True                        # use streaming TTS when supported
     output_format: str = "mp3_44100_128"       # elevenlabs audio format
+    optimize_streaming_latency: int | None = None  # elevenlabs latency optimization (0-4)
 
 
 class STTConfig(BaseModel):
@@ -291,9 +313,27 @@ class VoiceConfig(BaseModel):
     enabled: bool = False
     mode: str = "text"                         # text | voice | push_to_talk
     auto_send_msg: bool = True                 # automatically send STT text as message
+    max_speak_characters: int = 10000          # Maximum characters spoken per response (0 = unlimited)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     stt: STTConfig = Field(default_factory=STTConfig)
     audio: AudioConfig = Field(default_factory=AudioConfig)
+
+    @model_validator(mode="before")
+    @classmethod
+    def handle_voice_aliases(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            if "max_speak_characters" not in values:
+                for alias in (
+                    "max_characters",
+                    "max_speak_chars",
+                    "max_speak_character",
+                    "max_chars",
+                    "max_speak",
+                ):
+                    if alias in values:
+                        values["max_speak_characters"] = values[alias]
+                        break
+        return values
 
     @field_validator("auto_send_msg", mode="before")
     @classmethod
@@ -515,12 +555,11 @@ class JarvisConfig(BaseModel):
 
 
 def save_api_key_to_env(env_var_name: str, key_value: str) -> None:
-    """Save an API key to os.environ and persist it to ~/.jarvis/.env and repo .env."""
+    """Save an API key to os.environ and persist it to ~/.jarvis/.env."""
     os.environ[env_var_name] = key_value
 
     env_paths = [
         get_jarvis_home() / ".env",
-        PROJECT_ROOT / ".env",
     ]
 
     for env_path in env_paths:

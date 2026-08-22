@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path
 import sqlite3
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
-
-from PySide6.QtCore import QStandardPaths
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,13 +36,13 @@ class ConversationStore:
         self._initialize()
 
     @classmethod
-    def default(cls) -> "ConversationStore":
+    def default(cls) -> ConversationStore:
         from jarvis.core.paths import get_gui_dir
         return cls(get_gui_dir() / "conversations.db")
 
     @staticmethod
     def _now() -> str:
-        return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+        return datetime.now(UTC).isoformat(timespec="milliseconds")
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database_path)

@@ -4,8 +4,6 @@ Unit tests for context window usage calculation, models.dev lookup, and status b
 
 from __future__ import annotations
 
-import pytest
-
 from jarvis.providers.models_dev import get_model_context_limit
 from jarvis.ui.tui.widgets.status_bar import StatusBarWidget, format_context_usage
 

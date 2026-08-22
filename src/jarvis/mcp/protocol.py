@@ -39,8 +39,8 @@ class StdioTransport:
         server_env["PYTHONUNBUFFERED"] = "1"
 
         for key, value in self.config.env.items():
-            if value is not None and str(value).strip() != "":
-                server_env[key] = str(value)
+            if value is not None and value.strip() != "":
+                server_env[key] = value
 
         command = self.config.command
         args = list(self.config.args)
@@ -121,7 +121,7 @@ class HTTPTransport:
                 f"Could not connect to HTTP MCP server '{self.config.name}' at {url}: {e}"
             ) from e
 
-        read_stream, write_stream = transport
+        read_stream, write_stream, *_ = transport
         session = await exit_stack.enter_async_context(
             ClientSession(read_stream, write_stream)
         )

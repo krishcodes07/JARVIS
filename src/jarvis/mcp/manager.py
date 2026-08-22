@@ -54,7 +54,7 @@ class MCPManager:
             logger.info("MCP is disabled.")
             return
 
-        self.registry.load()
+        self.registry.load(config=self.config)
 
         # Auto-discovery of all server packages in servers/ (auto-register everything).
         discovery = ServerDiscoveryEngine()
@@ -97,7 +97,22 @@ class MCPManager:
 
         try:
             conn = await self.client.connect(server_config)
-            return True, f"Successfully connected to '{name}' ({len(conn.tools)} tools, {len(conn.resources)} resources)."
+            # Persist enabled state in user config so it automatically reconnects on next startup
+            existing: dict[str, Any] = dict(self.registry.get_all().get(name, {}))
+            if not existing and manifest:
+                existing = {
+                    "command": server_config.command,
+                    "args": server_config.args,
+                    "transport": str(server_config.transport.value),
+                    "description": server_config.description,
+                    "env": server_config.env,
+                }
+            existing["enabled"] = True
+            self.registry.register(name, existing)
+            self.registry.save_user_config()
+            tools_cnt = len(conn.tools)
+            res_cnt = len(conn.resources)
+            return True, f"Connected to '{name}' ({tools_cnt} tools, {res_cnt} resources)."
         except Exception as e:
             return False, f"Failed to connect to '{name}': {e}"
 
@@ -108,6 +123,12 @@ class MCPManager:
 
         try:
             await self.client.disconnect(name)
+            # Persist disabled state in user config
+            existing: dict[str, Any] = dict(self.registry.get_all().get(name, {}))
+            if existing:
+                existing["enabled"] = False
+                self.registry.register(name, existing)
+                self.registry.save_user_config()
             return True, f"Successfully disconnected from MCP server '{name}'."
         except Exception as e:
             return False, f"Failed to disconnect from '{name}': {e}"
@@ -120,98 +141,33 @@ class MCPManager:
     # ─── Server configuration ─────────────────────────────────
 
     def _build_server_configs(self) -> list[ServerConfig]:
-        """Build the list of enabled :class:`ServerConfig` objects.
-
-        Every server package discovered in ``servers/`` is auto-registered.
-        Per-server settings are merged with the following precedence
-        (highest first):
-
-        1. ``jarvis.yaml`` → ``mcp.servers.<name>`` overrides
-        2. Registry config (``servers.json`` / user ``mcp_servers.json``)
-        3. Server manifest defaults (``enabled_by_default``)
-
-        Honors ``mcp.auto_start`` when non-empty (connect only those).
-        """
+        """Build the list of enabled :class:`ServerConfig` objects."""
         auto_start = [name.lower() for name in self.config.mcp.auto_start]
         overrides = self.config.mcp.servers
 
-        # Base set: every discovered package plus any registry-configured
-        # servers that aren't on disk (e.g. npm/pip/git installed).
         names = set(self._manifests.keys())
         names.update(self.registry.get_all().keys())
 
         configs: list[ServerConfig] = []
         for name in sorted(names):
             if auto_start and name.lower() not in auto_start:
-                logger.debug("MCP server '%s' not in auto_start list; skipping.", name)
                 continue
 
             manifest = self._manifests.get(name)
             entry = self.registry.get_all().get(name, {})
             override = overrides.get(name)
 
-            # Enabled precedence: jarvis.yaml > registry > manifest default.
             enabled = (
                 override.enabled
                 if override is not None and override.enabled is not None
-                else entry.get(
-                    "enabled", manifest.enabled_by_default if manifest else True
-                )
+                else entry.get("enabled", manifest.enabled_by_default if manifest else False)
             )
             if not enabled:
-                logger.debug("MCP server '%s' is disabled; skipping.", name)
                 continue
 
-            transport_str = (
-                override.transport
-                if override is not None and override.transport
-                else str(entry.get("transport", "stdio")).lower()
-            )
-            try:
-                transport = TransportType(transport_str)
-            except ValueError:
-                transport = TransportType.STDIO
-
-            # Auto-registered servers default to a python-module launch.
-            command = (
-                override.command
-                if override is not None and override.command
-                else entry.get("command", "python")
-            )
-            args = list(
-                override.args
-                if override is not None and override.args
-                else entry.get("args", [])
-            )
-            if not args and manifest:
-                args = ["-m", f"jarvis.mcp.servers.{name}.server"]
-
-            env = dict(entry.get("env", {}))
-            env.update(override.env if override else {})
-
-            configs.append(
-                ServerConfig(
-                    name=name,
-                    enabled=True,
-                    transport=transport,
-                    command=command,
-                    args=args,
-                    env=env,
-                    timeout=int(
-                        override.timeout
-                        if override is not None and override.timeout is not None
-                        else entry.get("timeout", self.config.mcp.timeout)
-                    ),
-                    auto_restart=bool(entry.get("auto_restart", True)),
-                    url=override.url if override else entry.get("url"),
-                    description=(
-                        override.description
-                        if override is not None and override.description
-                        else entry.get("description", "")
-                    ),
-                )
-            )
-
+            cfg = self.get_server_config(name, force_enabled=True)
+            if cfg:
+                configs.append(cfg)
         return configs
 
     def register_server_config(self, name: str, config: dict[str, Any]) -> None:
@@ -236,7 +192,7 @@ class MCPManager:
             enabled = (
                 override.enabled
                 if override is not None and override.enabled is not None
-                else entry.get("enabled", manifest.enabled_by_default if manifest else True)
+                else entry.get("enabled", manifest.enabled_by_default if manifest else False)
             )
 
             desc = (
@@ -262,7 +218,7 @@ class MCPManager:
     list_available_servers = get_available_servers
 
     def get_server_config(self, name: str, force_enabled: bool = True) -> ServerConfig | None:
-        """Build a ServerConfig object for a server by name from registry, manifest, or overrides."""
+        """Build a ServerConfig object from registry, manifest, or overrides."""
         manifest = self._manifests.get(name)
         entry = self.registry.get_all().get(name, {})
         override = self.config.mcp.servers.get(name)
@@ -273,7 +229,7 @@ class MCPManager:
         enabled = True if force_enabled else (
             override.enabled
             if override is not None and override.enabled is not None
-            else entry.get("enabled", manifest.enabled_by_default if manifest else True)
+            else entry.get("enabled", manifest.enabled_by_default if manifest else False)
         )
 
         transport_str = (
@@ -327,8 +283,10 @@ class MCPManager:
     # ─── Tools (engine-facing) ────────────────────────────────
 
     def has_tool(self, qualified_name: str) -> bool:
-        """Return True if an MCP tool with the given qualified name is registered."""
-        return platform_registry.has_tool(qualified_name)
+        """Return True if an MCP tool with the given qualified name or short name is registered."""
+        if platform_registry.has_tool(qualified_name):
+            return True
+        return any(tool.name == qualified_name for tool in platform_registry.tools.values())
 
     def get_all_tools(self) -> list[dict[str, Any]]:
         """Get all registered MCP tools as OpenAI-format dicts."""
@@ -354,7 +312,7 @@ class MCPManager:
         """Execute a tool call routed to the correct MCP server.
 
         Args:
-            qualified_name: The qualified tool name (``server__tool``).
+            qualified_name: The qualified tool name (``server__tool``) or short name.
             arguments: Tool arguments.
 
         Returns:
@@ -364,6 +322,13 @@ class MCPManager:
             MCPError: If the tool or its server is unavailable.
         """
         registered = platform_registry.get_tool(qualified_name)
+        if not registered:
+            # Fallback to short name matching
+            for tool in platform_registry.tools.values():
+                if tool.name == qualified_name:
+                    registered = tool
+                    break
+
         if not registered:
             raise MCPError(f"Unknown MCP tool: '{qualified_name}'")
 

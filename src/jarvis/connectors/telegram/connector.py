@@ -9,7 +9,7 @@ import html
 import logging
 import os
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -46,10 +46,14 @@ class TelegramConnector(BaseConnector):
 
     @property
     def is_enabled(self) -> bool:
-        """Check if Telegram connector is enabled in configuration."""
+        """Check if Telegram connector is enabled in configuration and has a bot token."""
         if not self.config or not hasattr(self.config, "connectors"):
             return False
-        return self.config.connectors.enabled and self.config.connectors.telegram.enabled
+        return (
+            bool(self.config.connectors.enabled)
+            and bool(self.config.connectors.telegram.enabled)
+            and bool(self._get_bot_token())
+        )
 
     def _get_bot_token(self) -> str:
         """Retrieve Telegram bot token from config or environment."""
@@ -74,10 +78,8 @@ class TelegramConnector(BaseConnector):
 
         token = self._get_bot_token()
         if not token:
-            raise ValueError(
-                "Telegram bot token is not configured. Set 'connectors.telegram.bot_token' "
-                "in jarvis.yaml or TELEGRAM_BOT_TOKEN environment variable."
-            )
+            logger.info("Telegram connector skipped: TELEGRAM_BOT_TOKEN is not configured.")
+            return
 
         self._client = TelegramClient(bot_token=token)
 
@@ -95,7 +97,7 @@ class TelegramConnector(BaseConnector):
             raise
 
         self._running = True
-        self._connected_at = datetime.now(timezone.utc)
+        self._connected_at = datetime.now(UTC)
         self._poll_task = asyncio.create_task(self._poll_loop(), name="jarvis_telegram_poller")
         logger.info("Telegram connector polling started successfully.")
 

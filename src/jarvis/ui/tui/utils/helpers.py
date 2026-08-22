@@ -30,13 +30,13 @@ def handle_search_key_navigation(event: Key, search_input: Input | None, option_
             event.stop()
             option_list.action_cursor_up()
             if hasattr(option_list, "scroll_to_highlight"):
-                getattr(option_list, "scroll_to_highlight")()
+                option_list.scroll_to_highlight()
             return True
         if event.key == "down":
             event.stop()
             option_list.action_cursor_down()
             if hasattr(option_list, "scroll_to_highlight"):
-                getattr(option_list, "scroll_to_highlight")()
+                option_list.scroll_to_highlight()
             return True
         if event.key == "enter":
             event.stop()

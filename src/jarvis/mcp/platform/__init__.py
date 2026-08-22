@@ -8,7 +8,12 @@ instances, while the client discovers their tools/resources/prompts at
 connection time.
 """
 
-from jarvis.mcp.platform.discovery import DEFAULT_SERVERS_DIR, ServerDiscoveryEngine
+from jarvis.mcp.platform.discovery import (
+    DEFAULT_SERVERS_DIR,
+    ServerDiscoveryEngine,
+    default_search_paths,
+    get_user_servers_dir,
+)
 from jarvis.mcp.platform.loader import ServerPackageLoader
 from jarvis.mcp.platform.manifest import load_manifest_from_directory
 from jarvis.mcp.platform.models import (
@@ -38,6 +43,8 @@ __all__ = [
     "ServerStatus",
     "TransportType",
     "create_server_from_package",
+    "default_search_paths",
+    "get_user_servers_dir",
     "load_manifest_from_directory",
     "platform_registry",
 ]

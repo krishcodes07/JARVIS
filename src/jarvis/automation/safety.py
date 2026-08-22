@@ -168,9 +168,7 @@ class SafetyGuard:
                 formatted.append("<ctrl>")
             elif p == "alt":
                 formatted.append("<alt>")
-            elif p in ("shift", "win", "cmd", "super"):
-                formatted.append(f"<{p}>")
-            elif p.startswith("f") and p[1:].isdigit():
+            elif p in ("shift", "win", "cmd", "super") or (p.startswith("f") and p[1:].isdigit()):
                 formatted.append(f"<{p}>")
             else:
                 formatted.append(p)

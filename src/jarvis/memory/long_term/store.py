@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,18 @@ if TYPE_CHECKING:
     from jarvis.core.config import LongTermMemoryConfig
 
 logger = logging.getLogger(__name__)
+
+_WORD_RE = re.compile(r"[a-z0-9]+")
+
+# Words carrying no retrieval signal, so they don't inflate overlap scores.
+_STOPWORDS = frozenset(
+    ["a", "an", "and", "any", "are", "as", "at", "be", "been", "but", "by", "can", "could", "did", "do", "does", "for", "from", "had", "has", "have", "he", "her", "him", "his", "how", "i", "if", "in", "into", "is", "it", "its", "me", "my", "of", "on", "or", "our", "she", "should", "so", "such", "than", "that", "the", "their", "them", "then", "there", "these", "they", "this", "to", "was", "we", "were", "what", "when", "where", "which", "who", "whom", "why", "will", "with", "would", "you", "your"]
+)
+
+
+def _tokenize(text: str) -> list[str]:
+    """Split lowercased text into alphanumeric words."""
+    return _WORD_RE.findall(text)
 
 
 class LongTermStore(BaseMemory):
@@ -88,25 +101,50 @@ class LongTermStore(BaseMemory):
             }
         await self._persist()
 
-    async def retrieve(self, query: str) -> list[dict[str, Any]]:
-        """Retrieve memories relevant to a query.
+    async def retrieve(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
+        """Retrieve memories relevant to a query by keyword overlap.
 
-        Simple keyword matching for now. Will be enhanced with
-        semantic search via vector memory.
+        Scores each memory on how many of the query's significant words it
+        contains, normalized by query length. A whole-query substring match is
+        treated as a perfect hit. This is the fallback path used whenever
+        semantic (vector) recall is unavailable, so it must degrade gracefully
+        rather than requiring an exact phrase match.
 
         Args:
             query: Search query.
+            max_results: Maximum number of memories to return.
 
         Returns:
-            List of matching memory entries.
+            Matching memory entries, most relevant first.
         """
+        if not query:
+            return []
+
         query_lower = query.lower()
-        results = []
+        terms = {t for t in _tokenize(query_lower) if t not in _STOPWORDS}
+
+        scored: list[tuple[float, dict[str, Any]]] = []
         for key, memory in self._memories.items():
             content = memory.get("content", "")
-            if isinstance(content, str) and query_lower in content.lower():
-                results.append({"key": key, **memory})
-        return results
+            if not isinstance(content, str) or not content:
+                continue
+
+            content_lower = content.lower()
+            if query_lower in content_lower:
+                score = 1.0
+            elif terms:
+                content_terms = set(_tokenize(content_lower))
+                overlap = terms & content_terms
+                if not overlap:
+                    continue
+                score = len(overlap) / len(terms)
+            else:
+                continue
+
+            scored.append((score, {"key": key, "score": round(score, 4), **memory}))
+
+        scored.sort(key=lambda pair: pair[0], reverse=True)
+        return [entry for _, entry in scored[: max(1, max_results)]]
 
     async def delete(self, key: str) -> None:
         """Delete a memory by key."""

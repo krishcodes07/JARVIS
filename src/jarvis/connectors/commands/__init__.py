@@ -21,14 +21,14 @@ from jarvis.connectors.commands.system import (
 
 __all__ = [
     "BaseCommand",
+    "ClearSessionCommand",
     "CommandContext",
     "CommandRegistry",
-    "StartCommand",
     "HelpCommand",
-    "StatusCommand",
-    "SessionCommand",
-    "NewSessionCommand",
-    "ClearSessionCommand",
-    "ModelCommand",
     "MCPCommand",
+    "ModelCommand",
+    "NewSessionCommand",
+    "SessionCommand",
+    "StartCommand",
+    "StatusCommand",
 ]

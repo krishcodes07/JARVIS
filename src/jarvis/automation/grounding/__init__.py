@@ -8,7 +8,7 @@ from jarvis.automation.grounding.vision import VisualGrounder
 
 __all__ = [
     "ScreenManager",
-    "enable_dpi_awareness",
     "UIAGrounder",
     "VisualGrounder",
+    "enable_dpi_awareness",
 ]

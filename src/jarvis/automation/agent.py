@@ -13,14 +13,15 @@ import logging
 import re
 import time
 import uuid
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from jarvis.automation.controller import DesktopController
 from jarvis.automation.grounding.uia import UIAGrounder
 from jarvis.automation.grounding.vision import VisualGrounder
 from jarvis.automation.prompts import AUTOMATION_SYSTEM_PROMPT, build_agent_step_prompt
-from jarvis.automation.safety import AutomationAbortedError, SafetyGuard, SafetyViolationError
+from jarvis.automation.safety import AutomationAbortedError, SafetyGuard
 from jarvis.automation.schemas import (
     ActionType,
     AutomationAction,

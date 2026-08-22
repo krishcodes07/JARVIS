@@ -6,6 +6,8 @@ Clean design with proper proportions and visual clarity.
 from __future__ import annotations
 
 import contextlib
+import re
+from typing import TYPE_CHECKING
 
 from rich.text import Text
 from textual import events, on
@@ -13,10 +15,6 @@ from textual.containers import Horizontal
 from textual.message import Message
 from textual.widget import Widget
 from textual.widgets import Static, TextArea
-
-
-import re
-from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from textual.widgets.text_area import EditResult

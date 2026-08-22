@@ -133,6 +133,15 @@ class MainScreen(Screen):
             self.chat_view.clear_messages()
             self.prompt_box.show_hints()
 
+        # Alert user if no LLM provider is connected
+        if self.engine and self.engine.provider_manager and not self.engine.provider_manager.has_connected_provider:
+            self.show_toast(
+                "No AI provider connected. Use /connect (or press Ctrl+A) to connect a provider.",
+                title="No Provider Connected",
+                style="warning",
+                duration=6.0,
+            )
+
     def on_first_message(self) -> None:
         """Called by ChatViewWidget when the first message appears. Hide header and hints."""
         self.header.hide_header()
@@ -167,7 +176,7 @@ class MainScreen(Screen):
                 elif isinstance(item, dict):
                     total_chars += len(str(item.get("content", "")))
                 elif hasattr(item, "content"):
-                    total_chars += len(str(getattr(item, "content")))
+                    total_chars += len(str(item.content))
             return max(0, int(total_chars / 4))
         return 0
 
@@ -320,6 +329,16 @@ class MainScreen(Screen):
             self.prompt_box.clear()
             self.popover.hide()
             await self.handle_slash_command(user_input)
+            return
+
+        # Block chat query if no provider is connected
+        if self.engine and self.engine.provider_manager and not self.engine.provider_manager.has_connected_provider:
+            self.show_toast(
+                "No AI provider connected. Use /connect (or press Ctrl+A) to connect a provider and start chatting.",
+                title="No Provider Connected",
+                style="warning",
+                duration=5.0,
+            )
             return
 
         if self._is_generating:

@@ -14,7 +14,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Input, OptionList
 from textual.widgets.option_list import Option
 
-from jarvis.ui.tui.theme import THEME_REGISTRY, TUITheme, apply_theme, get_theme
+from jarvis.ui.tui.theme import THEME_REGISTRY, TUITheme, apply_theme
 from jarvis.ui.tui.utils import handle_search_key_navigation
 from jarvis.ui.tui.widgets.modal_dialog import ModalDialog
 

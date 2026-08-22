@@ -10,12 +10,12 @@ import time
 
 from rich.markdown import Markdown
 from rich.text import Text
-from textual import events, on
+from textual import events
 from textual.containers import VerticalScroll
 from textual.message import Message as TextualMessage
 from textual.widgets import Static
 
-from jarvis.ui.tui.utils import format_tool_name, truncate_text
+from jarvis.ui.tui.utils import format_tool_name
 
 THINK_TAG_OPEN_RE = re.compile(r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>", re.IGNORECASE)
 THINK_TAG_CLOSE_RE = re.compile(r"</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>", re.IGNORECASE)
@@ -216,7 +216,7 @@ class ThoughtWidget(Static):
             elif elapsed < 10.0:
                 elapsed_str = f"{elapsed:.1f}s"
             else:
-                elapsed_str = f"{int(round(elapsed))}s"
+                elapsed_str = f"{round(elapsed)}s"
 
         self._elapsed_str = elapsed_str
         self.header_widget.update(self._format_header())

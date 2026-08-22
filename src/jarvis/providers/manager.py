@@ -55,6 +55,11 @@ class ProviderManager:
         """Return the model identifier used for the last generation/stream turn."""
         return self._last_used_model
 
+    @property
+    def has_connected_provider(self) -> bool:
+        """Return True if at least one LLM provider is connected/configured with an API key."""
+        return bool(self._active_provider) or bool(self.registry.list_connected())
+
     async def initialize(self) -> None:
         """Initialize the provider manager and load the active provider."""
         self.registry.load()

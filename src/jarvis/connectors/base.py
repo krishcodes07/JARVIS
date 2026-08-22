@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from jarvis.connectors.commands.registry import CommandRegistry
 from jarvis.connectors.models import ConnectorStatus, InboundMessage
@@ -44,6 +44,7 @@ class BaseConnector(ABC):
     def _load_persisted_sessions(self) -> dict[str, str]:
         """Load persisted chat -> session mappings from disk."""
         import json
+
         from jarvis.core.paths import get_jarvis_home
         mapping_file = get_jarvis_home() / "workspace" / "connector_sessions.json"
         if mapping_file.exists():
@@ -58,6 +59,7 @@ class BaseConnector(ABC):
     def _save_persisted_sessions(self) -> None:
         """Save chat -> session mappings to disk."""
         import json
+
         from jarvis.core.paths import get_jarvis_home
         mapping_file = get_jarvis_home() / "workspace" / "connector_sessions.json"
         try:

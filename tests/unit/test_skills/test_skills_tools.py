@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from jarvis.core.config import JarvisConfig, SkillsConfig
+from jarvis.core.config import JarvisConfig
 from jarvis.core.engine import JarvisEngine
 from jarvis.core.exceptions import SkillNotFoundError
 from jarvis.skills.manager import format_skills_for_prompt, get_skill_readme, list_available_skills

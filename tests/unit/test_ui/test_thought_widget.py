@@ -1,6 +1,12 @@
 import pytest
 from textual.app import App
-from jarvis.ui.tui.widgets.chat_view import ChatViewWidget, MessageWidget, ThoughtWidget, ToolCallWidget
+
+from jarvis.ui.tui.widgets.chat_view import (
+    ChatViewWidget,
+    MessageWidget,
+    ThoughtWidget,
+    ToolCallWidget,
+)
 
 
 class ChatTestApp(App):
@@ -125,8 +131,8 @@ async def test_chat_view_load_session_history_with_thoughts():
 
 
 def test_persona_thinking_toggle():
-    from jarvis.prompts.persona import get_persona
     from jarvis.core.config import ProviderConfig
+    from jarvis.prompts.persona import get_persona
 
     # Default is thinking=True
     cfg = ProviderConfig()

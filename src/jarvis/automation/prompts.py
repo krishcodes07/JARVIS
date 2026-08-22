@@ -4,8 +4,7 @@ Automation Prompts — System prompts and reasoning formats for the Desktop Agen
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from jarvis.automation.schemas import AutomationObservation, AutomationStep

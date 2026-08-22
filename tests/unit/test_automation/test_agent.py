@@ -6,15 +6,14 @@ from __future__ import annotations
 
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from jarvis.automation.agent import AutomationAgent
 from jarvis.automation.schemas import (
     ActionType,
-    AutomationAction,
     AutomationGoalStatus,
     AutomationObservation,
-    WindowInfo,
 )
 from jarvis.core.config import JarvisConfig
 from jarvis.providers.base import GenerationResponse

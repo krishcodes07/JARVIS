@@ -7,7 +7,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import urllib.parse
-import webbrowser
 from typing import Any
 
 from jarvis.automation.controller import DesktopController

@@ -8,10 +8,10 @@ from jarvis.ui.gui.widgets.prompt_bar import PromptBar
 from jarvis.ui.gui.widgets.settings_page import SettingsPage
 
 __all__ = [
+    "ConversationView",
     "GlowIconButton",
     "JarvisOrb",
     "NavigationDrawer",
-    "ConversationView",
     "PromptBar",
     "SettingsPage",
 ]
