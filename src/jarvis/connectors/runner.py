@@ -52,6 +52,14 @@ async def run_connector_service(
                     target,
                     available,
                 )
+                print(f"\n[!] Connector '{target}' is not available. Discovered connectors: {available}\n")
+                return
+
+            ok, err_msg = conn.check_credentials()
+            if not ok:
+                logger.error(err_msg)
+                print(f"\n[!] {err_msg}\n")
+                return
             elif conn.is_running:
                 logger.info(f"Connector '{target}' is already running.")
             else:

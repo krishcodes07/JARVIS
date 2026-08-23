@@ -46,8 +46,8 @@ class DiscordConnector(BaseConnector):
         if not self.config or not hasattr(self.config, "connectors"):
             return False
         return (
-            bool(self.config.connectors.enabled)
-            and bool(self.config.connectors.discord.enabled)
+            self.config.connectors.enabled
+            and self.config.connectors.discord.enabled
             and bool(self._get_bot_token())
         )
 
@@ -100,10 +100,14 @@ class DiscordConnector(BaseConnector):
             logger.info("Discord connector is already running.")
             return
 
+        ok, err_msg = self.check_credentials()
+        if not ok:
+            logger.error(err_msg)
+            self._last_error = f"{self.env_var_name} is not set."
+            self._error_count += 1
+            raise ValueError(err_msg)
+
         token = self._get_bot_token()
-        if not token:
-            logger.info("Discord connector skipped: DISCORD_BOT_TOKEN is not configured.")
-            return
 
         try:
             import discord

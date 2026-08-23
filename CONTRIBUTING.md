@@ -16,7 +16,7 @@ Thank you for your interest in contributing to JARVIS! This guide will help you 
 
 ```bash
 # Clone the repo
-git clone https://github.com/YOUR_USERNAME/JARVIS.git
+git clone https://github.com/krishcodes07/JARVIS.git
 cd JARVIS
 
 # Create virtual environment

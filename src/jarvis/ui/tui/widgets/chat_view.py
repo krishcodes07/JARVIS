@@ -79,7 +79,14 @@ class MessageWidget(Static):
             self.update(Text(f"+ Thought: {content}", style="bold #ff9a4f"))
         elif self.role == "error":
             self.add_class("chat-error-message")
-            self.update(Text(f"❌ Error: {content}", style="bold #fca5a5"))
+            cleaned = content.strip()
+            while cleaned.startswith("❌"):
+                cleaned = cleaned[1:].strip()
+            while cleaned.lower().startswith("error:"):
+                cleaned = cleaned[6:].strip()
+            if not cleaned:
+                cleaned = "Request interrupted or an unexpected error occurred."
+            self.update(Text(f"❌ Error: {cleaned}", style="bold #fca5a5"))
         else:
             self.add_class("chat-message-jarvis")
             if content:
@@ -241,7 +248,7 @@ class ThoughtWidget(Static):
 
 
 class ToolCallWidget(Static):
-    """Clickable tool call widget displaying '→ ToolName description' in small grey text.
+    """Clickable tool call widget displaying '▸ ToolName description' in small grey text.
     
     Clicking toggles displaying the tool output directly below.
     """
@@ -287,8 +294,9 @@ class ToolCallWidget(Static):
 
     def _format_header(self) -> Text:
         formatted_name = format_tool_name(self.tool_name)
+        indicator = "▾ " if self._expanded else "▸ "
         t = Text()
-        t.append("→ ", style="dim #737373")
+        t.append(indicator, style="dim #737373")
         t.append(f"{formatted_name}", style="dim #a3a3a3")
         if self.args_str:
             t.append(f" {self.args_str}", style="dim #737373")
@@ -300,17 +308,30 @@ class ToolCallWidget(Static):
 
     def set_output(self, output_text: str) -> None:
         self.result_text = output_text
+        display_text = output_text
+        if len(display_text) > 10000:
+            display_text = display_text[:10000] + "\n... (output truncated)"
         t = Text()
-        t.append(f"↳ {output_text}", style="italic #737373")
+        t.append(f"↳ {display_text}", style="italic #737373")
         self.output_widget.update(t)
+        self.header_widget.update(self._format_header())
+
+    def toggle_expanded(self) -> None:
+        self._expanded = not self._expanded
+        if self._expanded:
+            if not self.result_text:
+                t = Text()
+                t.append("↳ (executing tool...)", style="italic #525252")
+                self.output_widget.update(t)
+            self.output_widget.add_class("expanded")
+        else:
+            self.output_widget.remove_class("expanded")
+        self.header_widget.update(self._format_header())
 
     def on_click(self, event: events.Click) -> None:
-        if self.result_text:
-            self._expanded = not self._expanded
-            if self._expanded:
-                self.output_widget.add_class("expanded")
-            else:
-                self.output_widget.remove_class("expanded")
+        event.stop()
+        event.prevent_default()
+        self.toggle_expanded()
 
 
 class AssistantFooterWidget(Static):

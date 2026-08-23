@@ -69,6 +69,30 @@ class BaseConnector(ABC):
             logger.warning(f"Failed to save connector_sessions.json: {e}")
 
     @property
+    def env_var_name(self) -> str:
+        """Name of the primary environment variable containing this connector's bot token."""
+        return f"{self.name.upper()}_BOT_TOKEN"
+
+    def check_credentials(self) -> tuple[bool, str]:
+        """Verify whether required credentials/tokens are set for this connector.
+
+        Returns:
+            (True, "") if credentials are set, or (False, error_message) if missing.
+        """
+        token = self._get_bot_token() if hasattr(self, "_get_bot_token") else ""
+        if token:
+            return True, ""
+
+        from jarvis.core.paths import get_jarvis_home
+        env_var = self.env_var_name
+        home_env = get_jarvis_home() / ".env"
+        msg = (
+            f"Cannot connect {self.name.title()}: `{env_var}` is not set.\n"
+            f"Set your `{env_var}` in {home_env} (or in ~/.jarvis/config/jarvis.yaml under connectors.{self.name}.bot_token)."
+        )
+        return False, msg
+
+    @property
     @abstractmethod
     def is_enabled(self) -> bool:
         """Check whether this connector is enabled in configuration."""

@@ -7,6 +7,7 @@ an OpenAI-compatible API (which is the vast majority of LLM providers).
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from collections.abc import AsyncIterator
@@ -82,7 +83,6 @@ class OpenAIProvider(BaseProvider):
             if response.is_error:
                 error_bytes = await response.aread()
                 try:
-                    import json
                     err_data = json.loads(error_bytes.decode())
                     err_msg = err_data.get("error", {}).get("message", error_bytes.decode())
                 except Exception:
@@ -93,25 +93,57 @@ class OpenAIProvider(BaseProvider):
 
             in_reasoning = False
             async for line in response.aiter_lines():
-                if not line.startswith("data: "):
+                line = line.strip()
+                if not line or not line.startswith("data:"):
                     continue
-                data_str = line[6:]  # Remove "data: " prefix
-                if data_str.strip() == "[DONE]":
+                data_str = line[5:].strip()
+                if data_str == "[DONE]":
                     if in_reasoning:
                         yield StreamChunk(content="\n</think>\n")
                         in_reasoning = False
                     break
 
-                import json
-                data = json.loads(data_str)
+                try:
+                    data = json.loads(data_str)
+                except Exception:
+                    continue
+
+                if isinstance(data, dict) and "error" in data:
+                    err_info = data["error"]
+                    err_text = err_info.get("message", str(err_info)) if isinstance(err_info, dict) else str(err_info)
+                    from jarvis.core.exceptions import ProviderError
+                    raise ProviderError(f"OpenAI API Error: {err_text}")
+
                 choices = data.get("choices", [])
                 if not choices:
                     continue
-                delta = choices[0].get("delta", {})
-                reasoning = delta.get("reasoning_content") or delta.get("reasoning")
-                content = delta.get("content", "") or ""
-                tool_calls = delta.get("tool_calls") or []
-                finish_reason = choices[0].get("finish_reason")
+                choice = choices[0]
+                delta = choice.get("delta") or choice.get("message") or {}
+                if isinstance(delta, str):
+                    content = delta
+                    reasoning = ""
+                    tool_calls = []
+                else:
+                    raw_reasoning = (
+                        delta.get("reasoning_content")
+                        or delta.get("reasoning")
+                        or delta.get("thought")
+                        or delta.get("thinking")
+                        or ""
+                    )
+                    if isinstance(raw_reasoning, list):
+                        reasoning = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in raw_reasoning)
+                    else:
+                        reasoning = str(raw_reasoning) if raw_reasoning else ""
+
+                    raw_content = delta.get("content") or choice.get("text") or ""
+                    if isinstance(raw_content, list):
+                        content = "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in raw_content)
+                    else:
+                        content = str(raw_content) if raw_content else ""
+
+                    tool_calls = delta.get("tool_calls") or choice.get("tool_calls") or []
+                finish_reason = choice.get("finish_reason")
 
                 if reasoning:
                     if not in_reasoning:
@@ -272,8 +304,15 @@ class OpenAIProvider(BaseProvider):
             msg["name"] = message.name
         if message.tool_calls:
             msg["tool_calls"] = message.tool_calls
-            if not message.content:
-                msg["content"] = None
+            # Strip reasoning tags from assistant message content when tool_calls is present
+            raw_content = message.content if isinstance(message.content, str) else str(message.content or "")
+            cleaned = re.sub(
+                r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>.*?(?:</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>|$)",
+                "",
+                raw_content,
+                flags=re.DOTALL | re.IGNORECASE,
+            ).strip()
+            msg["content"] = cleaned if cleaned else None
         if message.tool_call_id:
             msg["tool_call_id"] = message.tool_call_id
         return msg

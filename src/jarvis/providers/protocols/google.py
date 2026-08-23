@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -106,9 +107,14 @@ class GoogleProvider(BaseProvider):
 
             in_thought = False
             async for line in response.aiter_lines():
-                if not line.startswith("data: "):
+                line = line.strip()
+                if not line or not line.startswith("data:"):
                     continue
-                data = json.loads(line[6:])
+                data_str = line[5:].strip()
+                try:
+                    data = json.loads(data_str)
+                except Exception:
+                    continue
                 candidates = data.get("candidates", [])
                 if not candidates:
                     continue
@@ -379,6 +385,13 @@ class GoogleProvider(BaseProvider):
                         parts.append(part_dict)
 
                 text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                if msg.role == "assistant" and msg.tool_calls and text:
+                    text = re.sub(
+                        r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>.*?(?:</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>|$)",
+                        "",
+                        text,
+                        flags=re.DOTALL | re.IGNORECASE,
+                    ).strip()
                 if text:
                     parts.insert(0, {"text": text})
                 elif not parts:

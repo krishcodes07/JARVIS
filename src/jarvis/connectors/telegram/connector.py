@@ -50,8 +50,8 @@ class TelegramConnector(BaseConnector):
         if not self.config or not hasattr(self.config, "connectors"):
             return False
         return (
-            bool(self.config.connectors.enabled)
-            and bool(self.config.connectors.telegram.enabled)
+            self.config.connectors.enabled
+            and self.config.connectors.telegram.enabled
             and bool(self._get_bot_token())
         )
 
@@ -76,11 +76,14 @@ class TelegramConnector(BaseConnector):
             logger.info("Telegram connector is already running.")
             return
 
-        token = self._get_bot_token()
-        if not token:
-            logger.info("Telegram connector skipped: TELEGRAM_BOT_TOKEN is not configured.")
-            return
+        ok, err_msg = self.check_credentials()
+        if not ok:
+            logger.error(err_msg)
+            self._last_error = f"{self.env_var_name} is not set."
+            self._error_count += 1
+            raise ValueError(err_msg)
 
+        token = self._get_bot_token()
         self._client = TelegramClient(bot_token=token)
 
         try:

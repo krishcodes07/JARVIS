@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -99,9 +100,14 @@ class AnthropicProvider(BaseProvider):
             tool_blocks: dict[int, dict[str, Any]] = {}
             thinking_blocks: set[int] = set()
             async for line in response.aiter_lines():
-                if not line.startswith("data: "):
+                line = line.strip()
+                if not line or not line.startswith("data:"):
                     continue
-                data = json.loads(line[6:])
+                data_str = line[5:].strip()
+                try:
+                    data = json.loads(data_str)
+                except Exception:
+                    continue
                 event_type = data.get("type", "")
                 index = data.get("index", 0)
 
@@ -274,7 +280,14 @@ class AnthropicProvider(BaseProvider):
             blocks: list[dict[str, Any]] = []
             text = message.content if isinstance(message.content, str) else str(message.content)
             if text:
-                blocks.append({"type": "text", "text": text})
+                cleaned = re.sub(
+                    r"<(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>.*?(?:</(?:think|thought|reasoning)(?::[a-zA-Z0-9_-]+)?>|$)",
+                    "",
+                    text,
+                    flags=re.DOTALL | re.IGNORECASE,
+                ).strip()
+                if cleaned:
+                    blocks.append({"type": "text", "text": cleaned})
 
             for tc in message.tool_calls:
                 fn = tc.get("function", {})
