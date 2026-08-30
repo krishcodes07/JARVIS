@@ -83,13 +83,20 @@ export const ThreeBackground: React.FC<ThreeBackgroundProps> = ({
     if (style === 'classic') return;
 
     const onPointerMove = (e: PointerEvent) => {
-      const bg = containerRef.current?.querySelector<HTMLElement>('.threeui-background');
-      if (bg) {
-        bg.dispatchEvent(
+      // Ignore synthetic events to prevent infinite dispatch loops
+      if (!e.isTrusted) return;
+
+      const target =
+        containerRef.current?.querySelector<HTMLElement>('.threeui-background canvas') ||
+        containerRef.current?.querySelector<HTMLElement>('.threeui-background');
+
+      if (target && e.target !== target) {
+        target.dispatchEvent(
           new PointerEvent('pointermove', {
             clientX: e.clientX,
             clientY: e.clientY,
-            bubbles: true,
+            bubbles: false,
+            cancelable: false,
           })
         );
       }
