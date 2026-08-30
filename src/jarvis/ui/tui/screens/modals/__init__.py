@@ -4,6 +4,7 @@ Modals package for JARVIS TUI dialogs.
 
 from jarvis.ui.tui.screens.modals.add_mcp_modal import AddMCPModal
 from jarvis.ui.tui.screens.modals.api_key_modal import ApiKeyModal
+from jarvis.ui.tui.screens.modals.ask_user_modal import AskUserModal
 from jarvis.ui.tui.screens.modals.command_modal import CommandModal
 from jarvis.ui.tui.screens.modals.config_modal import ConfigModal
 from jarvis.ui.tui.screens.modals.confirm_modal import ConfirmModal
@@ -20,6 +21,7 @@ from jarvis.ui.tui.screens.modals.theme_modal import ThemeModal
 __all__ = [
     "AddMCPModal",
     "ApiKeyModal",
+    "AskUserModal",
     "CommandModal",
     "ConfigModal",
     "ConfirmModal",

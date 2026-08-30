@@ -320,6 +320,18 @@ def test_openai_payload_thinking_toggle_and_reasoning_options():
     assert "reasoning_effort" not in payload_standard
     assert "reasoning" not in payload_standard
 
+    # 5. OpenRouter provider sends reasoning as an object
+    openrouter_p = OpenAIProvider(api_key="test", base_url="https://openrouter.ai/api/v1")
+    cfg_openrouter = GenerationConfig(model="gpt-5.5", provider_id="openrouter", thinking=True, reasoning_effort="high")
+    payload_openrouter = openrouter_p._build_payload(msgs, cfg_openrouter)
+    assert payload_openrouter.get("reasoning") == {"effort": "high"}
+    assert "reasoning_effort" not in payload_openrouter
+
+    # 6. Max tokens clamping
+    cfg_huge = GenerationConfig(model="llama-3.3-70b-versatile", max_tokens=262144)
+    payload_huge = openai_p._build_payload(msgs, cfg_huge)
+    assert payload_huge["max_tokens"] <= 16384
+
 
 def test_anthropic_payload_thinking_toggle():
     anthropic_p = AnthropicProvider(api_key="test", base_url="https://api.anthropic.com")

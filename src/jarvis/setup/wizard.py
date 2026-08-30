@@ -753,7 +753,12 @@ async def run_setup_wizard() -> bool:
         )
     )
     console.print()
-    console.print(f"[bold yellow]Step 1/{TOTAL_STEPS}: Assistant Identity[/bold yellow]")
+    console.print(f"[bold yellow]Step 1/{TOTAL_STEPS}: Identity & User Name[/bold yellow]")
+    user_name = (
+        Prompt.ask("What is your name? (How should JARVIS address you?)", default="Sir").strip()
+        or "Sir"
+    )
+    config.jarvis.user_name = user_name
     assistant_name = (
         Prompt.ask("What do you want to name your assistant?", default=config.jarvis.name).strip()
         or config.jarvis.name

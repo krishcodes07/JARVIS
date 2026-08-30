@@ -44,6 +44,7 @@ class ToolExecutor:
         tool_name: str,
         arguments: dict[str, Any] | str,
         approval_callback: ApprovalCallback | None = None,
+        ask_user_callback: Any | None = None,
     ) -> str:
         """Execute a tool by name with the given arguments.
 
@@ -52,6 +53,7 @@ class ToolExecutor:
             arguments: Tool arguments (dict or JSON string).
             approval_callback: Async callback invoked for dangerous tools.
                 Return True to approve, False to deny.
+            ask_user_callback: Optional async callback for interactive user prompts.
 
         Returns:
             Tool execution result as a string.
@@ -75,6 +77,10 @@ class ToolExecutor:
         if not isinstance(arguments, dict):
             arguments = {}
 
+        exec_args = dict(arguments)
+        if ask_user_callback is not None:
+            exec_args["ask_user_callback"] = ask_user_callback
+
         # Approval gate for dangerous tools
         if tool.schema.dangerous and not self.config.tools.auto_approve:
             approved = False
@@ -97,14 +103,17 @@ class ToolExecutor:
                     "they want to allow it."
                 )
 
+        # For interactive tools like ask_user, provide a generous timeout (300s)
+        execution_timeout = 300.0 if tool_name in ("ask_user", "ask_question") else self.timeout
+
         # Execute with retries
         last_error: Exception | None = None
         for attempt in range(1, self.max_retries + 1):
             try:
                 t0 = time.perf_counter()
                 result = await asyncio.wait_for(
-                    tool.execute(**arguments),
-                    timeout=self.timeout,
+                    tool.execute(**exec_args),
+                    timeout=execution_timeout,
                 )
                 duration_ms = int((time.perf_counter() - t0) * 1000)
                 logger.info(

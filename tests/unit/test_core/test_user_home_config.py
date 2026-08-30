@@ -99,3 +99,19 @@ def test_user_home_env_keys(tmp_path, monkeypatch):
     env_content = (custom_home / ".env").read_text(encoding="utf-8")
     assert "TEST_JARVIS_API_KEY=secret_key_12345" in env_content
 
+
+def test_provider_base_urls_config(tmp_path, monkeypatch):
+    custom_home = tmp_path / ".jarvis_test_base_urls"
+    monkeypatch.setenv("JARVIS_HOME", str(custom_home))
+
+    ensure_jarvis_home()
+    cfg = JarvisConfig.load()
+    assert cfg.provider.base_urls == {}
+
+    cfg.provider.base_urls["ollama"] = "http://localhost:11434/v1"
+    cfg.save()
+
+    loaded = JarvisConfig.load()
+    assert loaded.provider.base_urls.get("ollama") == "http://localhost:11434/v1"
+
+

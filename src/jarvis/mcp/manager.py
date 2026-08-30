@@ -147,6 +147,8 @@ class MCPManager:
 
         names = set(self._manifests.keys())
         names.update(self.registry.get_all().keys())
+        # Servers added through the settings UI exist only as config overrides.
+        names.update(overrides.keys())
 
         configs: list[ServerConfig] = []
         for name in sorted(names):
@@ -223,7 +225,13 @@ class MCPManager:
         entry = self.registry.get_all().get(name, {})
         override = self.config.mcp.servers.get(name)
 
-        if not manifest and not entry:
+        # A server added through the settings UI lives only in ``config.mcp.servers``
+        # until its first successful connection, so an override carrying a command
+        # (or an SSE url) is a valid source on its own.
+        override_is_runnable = bool(
+            override is not None and (getattr(override, "command", None) or getattr(override, "url", None))
+        )
+        if not manifest and not entry and not override_is_runnable:
             return None
 
         enabled = True if force_enabled else (

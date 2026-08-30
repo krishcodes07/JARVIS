@@ -28,6 +28,7 @@ from jarvis.providers.models_dev import (
 )
 from jarvis.ui.tui.screens.modals import (
     ApiKeyModal,
+    AskUserModal,
     ConfigModal,
     ConnectModal,
     DebugModal,
@@ -414,12 +415,25 @@ class MainScreen(Screen):
             self.chat_view.add_tool_call(f"APPROVAL REQUIRED: {tool_name}", args_str)
             return True
 
+        async def ask_user_callback(questions: list[dict[str, Any]]) -> dict[str, Any] | None:
+            self._dismiss_active_modals()
+            loop = asyncio.get_running_loop()
+            fut: asyncio.Future[dict[str, Any] | None] = loop.create_future()
+
+            def on_dismiss(result: dict[str, Any] | None) -> None:
+                if not fut.done():
+                    fut.set_result(result)
+
+            self.app.push_screen(AskUserModal(questions=questions), callback=on_dismiss)
+            return await fut
+
         try:
             async for chunk in self.engine.stream_chat(
                 query,
                 on_tool_call=on_tool_call,
                 on_tool_result=on_tool_result,
                 approval_callback=approval_callback,
+                ask_user_callback=ask_user_callback,
             ):
                 self.chat_view.append_assistant_chunk(chunk)
 
@@ -514,10 +528,23 @@ class MainScreen(Screen):
                 def on_tool_result(tool_name: str, result: str):
                     self.chat_view.add_tool_output(result)
 
+                async def voice_ask_user_callback(questions: list[dict[str, Any]]) -> dict[str, Any] | None:
+                    self._dismiss_active_modals()
+                    loop = asyncio.get_running_loop()
+                    fut: asyncio.Future[dict[str, Any] | None] = loop.create_future()
+
+                    def on_dismiss(result: dict[str, Any] | None) -> None:
+                        if not fut.done():
+                            fut.set_result(result)
+
+                    self.app.push_screen(AskUserModal(questions=questions), callback=on_dismiss)
+                    return await fut
+
                 async for chunk in self.engine.stream_chat(  # type: ignore[union-attr]
                     user_query,
                     on_tool_call=on_tool_call,
                     on_tool_result=on_tool_result,
+                    ask_user_callback=voice_ask_user_callback,
                 ):
                     if not self.voice_controller.is_active:
                         break

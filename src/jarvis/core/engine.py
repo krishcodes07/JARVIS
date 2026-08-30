@@ -79,6 +79,7 @@ class JarvisEngine:
         self.session: Session | None = None
         self._initialized: bool = False
         self._background_tasks: set[Any] = set()
+        self.ask_user_callback: Any = None
 
     @property
     def last_used_model(self) -> str:
@@ -188,6 +189,7 @@ class JarvisEngine:
         on_tool_call = kwargs.get("on_tool_call")
         on_tool_result = kwargs.get("on_tool_result")
         approval_callback = kwargs.get("approval_callback")
+        ask_user_callback = kwargs.get("ask_user_callback") or getattr(self, "ask_user_callback", None)
 
         while current_turn < max_turns:
             gen_config = self._build_gen_config(tool_defs=tool_defs if tool_defs else None)
@@ -239,6 +241,7 @@ class JarvisEngine:
                     tool_name,
                     tool_args,
                     approval_callback=approval_callback,
+                    ask_user_callback=ask_user_callback,
                 )
                 all_raw_defs = await self._get_all_raw_tool_definitions()
                 self._update_tool_defs_from_schema_call(
@@ -335,6 +338,7 @@ class JarvisEngine:
         on_tool_call = kwargs.get("on_tool_call")
         on_tool_result = kwargs.get("on_tool_result")
         approval_callback = kwargs.get("approval_callback")
+        ask_user_callback = kwargs.get("ask_user_callback") or getattr(self, "ask_user_callback", None)
 
         if not self.provider_manager:
             raise RuntimeError("Provider manager unavailable.")
@@ -399,6 +403,7 @@ class JarvisEngine:
                         tool_name,
                         tool_args,
                         approval_callback=approval_callback,
+                        ask_user_callback=ask_user_callback,
                     )
                     all_raw_defs = await self._get_all_raw_tool_definitions()
                     self._update_tool_defs_from_schema_call(
@@ -562,6 +567,29 @@ class JarvisEngine:
         except Exception as e:
             self.voice_manager = None
             logger.warning(f"Voice manager failed to initialize ({e}); using text mode.")
+
+    async def reload_voice(self) -> bool:
+        """Rebuild the voice manager from the current config, in place.
+
+        The settings UI can flip ``voice.enabled`` or swap the TTS/STT provider at
+        runtime; without this the change only took effect after a restart.
+
+        Returns:
+            True if a voice manager is live afterwards.
+        """
+        if self.voice_manager is not None:
+            with contextlib.suppress(Exception):
+                await self.voice_manager.shutdown()
+            self.voice_manager = None
+
+        if not self.config:
+            return False
+
+        from jarvis.voice.registry import clear_voice_cache
+
+        clear_voice_cache()
+        await self._init_voice(self.config)
+        return self.voice_manager is not None
 
     async def _init_connectors(self, config: JarvisConfig) -> None:
         """Initialize and auto-start enabled messaging platform connectors."""
@@ -735,6 +763,7 @@ class JarvisEngine:
         always_inc_names.add("list_tools")
         always_inc_names.add("get_schema")
         always_inc_names.add("get_skill")
+        always_inc_names.add("ask_user")
 
         selected_tools = [t for t in all_defs if t.name in always_inc_names]
         return selected_tools, capability_summary
@@ -744,6 +773,7 @@ class JarvisEngine:
         tool_name: str,
         tool_args: dict[str, Any],
         approval_callback: Any = None,
+        ask_user_callback: Any = None,
     ) -> str:
         """Execute a tool, routing MCP-qualified names to the MCP manager.
 
@@ -763,6 +793,7 @@ class JarvisEngine:
                 tool_name,
                 tool_args,
                 approval_callback=approval_callback,
+                ask_user_callback=ask_user_callback,
             )
         except Exception as e:
             return f"Error executing tool '{tool_name}': {e}"
@@ -794,21 +825,21 @@ class JarvisEngine:
         temp = getattr(p_cfg, "temperature", 0.7)
         temperature = float(temp) if isinstance(temp, (int, float)) else 0.7
         m_tokens = getattr(p_cfg, "max_tokens", 4096)
-        max_tokens = int(m_tokens) if isinstance(m_tokens, int) else 4096
+        max_tokens = m_tokens if isinstance(m_tokens, int) else 16000
         tp = getattr(p_cfg, "top_p", 1.0)
         top_p = float(tp) if isinstance(tp, (int, float)) else 1.0
 
         th = getattr(p_cfg, "thinking", True)
-        thinking = bool(th) if isinstance(th, bool) else True
+        thinking = th if isinstance(th, bool) else True
 
         re = getattr(p_cfg, "reasoning_effort", None)
-        reasoning_effort = str(re) if isinstance(re, str) else None
+        reasoning_effort = re if isinstance(re, str) else None
 
         tb = getattr(p_cfg, "thinking_budget", None)
-        thinking_budget = int(tb) if isinstance(tb, int) else None
+        thinking_budget = tb if isinstance(tb, int) else None
 
         pid = getattr(p_cfg, "active", None)
-        provider_id = str(pid) if isinstance(pid, str) else None
+        provider_id = pid if isinstance(pid, str) else None
 
         return GenerationConfig(
             model=model,

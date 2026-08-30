@@ -41,3 +41,8 @@ Thumbs.db
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+
+# Node / frontend
+node_modules/
+*.tsbuildinfo
+src/jarvis/ui/web/frontend/dist/

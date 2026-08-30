@@ -219,12 +219,16 @@ class OpenAIProvider(BaseProvider):
         config: GenerationConfig,
         stream: bool = False,
     ) -> dict[str, Any]:
-        """Build the request payload."""
+        # Clamp max_tokens to prevent exceeding total context length on endpoints with large default outputs
+        max_tokens = config.max_tokens
+        if isinstance(max_tokens, int) and max_tokens > 16384:
+            max_tokens = 16384
+
         payload: dict[str, Any] = {
             "model": config.model,
             "messages": [self._format_message(m) for m in messages],
             "temperature": config.temperature,
-            "max_tokens": config.max_tokens,
+            "max_tokens": max_tokens,
             "top_p": config.top_p,
             "stream": stream,
         }
@@ -253,6 +257,10 @@ class OpenAIProvider(BaseProvider):
         )
 
         model_info = get_model_info(config.model, config.provider_id)
+        is_openrouter = (
+            "openrouter" in str(self._client.base_url).lower()
+            or bool(config.provider_id and "openrouter" in config.provider_id.lower())
+        )
 
         if not config.thinking or config.reasoning_effort == "none":
             # User disabled thinking:
@@ -260,16 +268,20 @@ class OpenAIProvider(BaseProvider):
             if has_configurable_reasoning(config.model, config.provider_id, model_info):
                 effort_values = get_model_effort_values(config.model, config.provider_id, model_info)
                 if "none" in effort_values:
-                    payload["reasoning_effort"] = "none"
+                    if is_openrouter:
+                        payload["reasoning"] = {"effort": "none"}
+                    else:
+                        payload["reasoning_effort"] = "none"
                 else:
                     opts = model_info.get("reasoning_options", []) if model_info else []
                     has_toggle = any(isinstance(o, dict) and o.get("type") == "toggle" for o in opts)
                     if has_toggle:
-                        payload["reasoning"] = False
+                        if is_openrouter:
+                            payload["reasoning"] = {"effort": "none"}
+                        else:
+                            payload["reasoning"] = False
             # If is_only_thinking_model: thinking cannot be disabled, so we don't send disabling flags and let it think normally
         elif config.thinking:
-
-
             # User enabled thinking:
             if has_configurable_reasoning(config.model, config.provider_id, model_info):
                 effort_values = get_model_effort_values(config.model, config.provider_id, model_info)
@@ -284,12 +296,18 @@ class OpenAIProvider(BaseProvider):
                             non_none = [v for v in effort_values if v != "none"]
                             effort = non_none[0] if non_none else effort_values[-1]
                     if effort and effort != "none":
-                        payload["reasoning_effort"] = effort
+                        if is_openrouter:
+                            payload["reasoning"] = {"effort": effort}
+                        else:
+                            payload["reasoning_effort"] = effort
                 else:
                     opts = model_info.get("reasoning_options", []) if model_info else []
                     has_toggle = any(isinstance(o, dict) and o.get("type") == "toggle" for o in opts)
                     if has_toggle:
-                        payload["reasoning"] = True
+                        if is_openrouter:
+                            payload["reasoning"] = {"effort": "medium"}
+                        else:
+                            payload["reasoning"] = True
 
         return payload
 

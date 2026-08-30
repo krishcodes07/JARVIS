@@ -1,0 +1,224 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Token defaults. These mirror the `jarvis` theme in src/theme/themes.ts and
+ * exist so the first paint (before React mounts and calls applyTheme) is
+ * already correct rather than unstyled.
+ */
+:root {
+  --bg-void: 3 2 13;
+  --bg-surface-1: 14 11 31;
+  --bg-surface-2: 21 17 42;
+  --bg-surface-3: 9 7 28;
+
+  --border-subtle: 148 130 255;
+  --border-strong: 167 139 250;
+
+  --text-primary: 248 250 252;
+  --text-secondary: 203 213 225;
+  --text-muted: 148 163 184;
+
+  --accent: 139 92 246;
+  --accent-soft: 192 132 252;
+  --accent-glow: 124 58 237;
+
+  --success: 52 211 153;
+  --warning: 251 191 36;
+  --danger: 248 113 113;
+  --info: 56 189 248;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background-color: rgb(var(--bg-void));
+    color: rgb(var(--text-primary));
+    font-family: 'Poppins', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+  }
+
+  /*
+   * Chrome (nav, toolbars, buttons) is unselectable; message content is not.
+   * The previous global `user-select: none` on body made all assistant output
+   * impossible to copy.
+   */
+  [data-chrome] {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  ::selection {
+    background-color: rgb(var(--accent) / 0.35);
+    color: rgb(var(--text-primary));
+  }
+
+  :focus-visible {
+    outline: 2px solid rgb(var(--accent) / 0.7);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* ── Ambient background ─────────────────────────────────────────── */
+
+  .perspective-container {
+    perspective: 700px;
+    perspective-origin: 50% 35%;
+  }
+
+  .grid-floor {
+    position: absolute;
+    bottom: -15%;
+    left: -50%;
+    width: 200%;
+    height: 90%;
+    transform: rotateX(68deg);
+    background-image:
+      linear-gradient(to right, rgb(var(--accent) / 0.22) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(var(--accent) / 0.22) 1px, transparent 1px);
+    background-size: 70px 70px;
+    mask-image: linear-gradient(to top, rgb(0 0 0 / 1) 0%, rgb(0 0 0 / 0.8) 45%, transparent 85%);
+    -webkit-mask-image: linear-gradient(to top, rgb(0 0 0 / 1) 0%, rgb(0 0 0 / 0.8) 45%, transparent 85%);
+    pointer-events: none;
+  }
+
+  .horizon-glow {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 45%;
+    background: radial-gradient(
+      ellipse at 50% 100%,
+      rgb(var(--accent-glow) / 0.2) 0%,
+      rgb(var(--accent-glow) / 0.08) 40%,
+      transparent 75%
+    );
+    pointer-events: none;
+  }
+
+  .fog-right {
+    position: absolute;
+    bottom: 10%;
+    right: 5%;
+    width: 50%;
+    height: 40%;
+    background: radial-gradient(
+      ellipse at center,
+      rgb(var(--accent) / 0.15) 0%,
+      rgb(var(--accent-glow) / 0.06) 45%,
+      transparent 70%
+    );
+    filter: blur(50px);
+    pointer-events: none;
+  }
+
+  /* Dimmed variant used once a conversation is underway, so prose stays legible. */
+  .ambient-dim .grid-floor {
+    opacity: 0.28;
+  }
+  .ambient-dim .horizon-glow {
+    opacity: 0.45;
+  }
+  .ambient-dim .fog-right {
+    opacity: 0.35;
+  }
+
+  /* ── Text glow ──────────────────────────────────────────────────── */
+
+  .text-glow-accent {
+    text-shadow:
+      0 0 30px rgb(var(--accent-soft) / 0.45),
+      0 0 60px rgb(var(--accent) / 0.25);
+  }
+
+  .text-glow-white {
+    text-shadow: 0 0 25px rgb(var(--text-primary) / 0.35);
+  }
+
+  /* ── Surfaces ───────────────────────────────────────────────────── */
+
+  .panel {
+    background-color: rgb(var(--bg-surface-1) / 0.75);
+    border: 1px solid rgb(var(--border-subtle) / 0.08);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .hairline {
+    border-color: rgb(var(--border-subtle) / 0.08);
+  }
+
+  /* ── Scrollbars ─────────────────────────────────────────────────── */
+
+  .scroll-area {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(var(--accent) / 0.3) transparent;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--accent) / 0.22);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--accent) / 0.45);
+  background-clip: content-box;
+}
+
+/*
+ * Motion opt-out. Honoured both by the Appearance settings toggle
+ * (data-animations="off") and by the OS-level preference.
+ */
+[data-animations='off'] *,
+[data-animations='off'] *::before,
+[data-animations='off'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -105,10 +105,18 @@ class ProviderManager:
             )
 
         # Instantiate the correct protocol handler
+        custom_base_url = None
+        if hasattr(self.config.provider, "base_urls") and self.config.provider.base_urls:
+            custom_base_url = (
+                self.config.provider.base_urls.get(name)
+                or self.config.provider.base_urls.get(provider_def.name)
+            )
+        base_url = custom_base_url or provider_def.base_url
+
         self._active_provider = self._create_protocol(
             protocol=provider_def.protocol,
             api_key=api_key,
-            base_url=provider_def.base_url,
+            base_url=base_url,
             extra_headers=provider_def.extra_headers,
         )
         self._active_name = name
@@ -253,10 +261,18 @@ class ProviderManager:
         if not api_key:
             return None
 
+        custom_base_url = None
+        if hasattr(self.config.provider, "base_urls") and self.config.provider.base_urls:
+            custom_base_url = (
+                self.config.provider.base_urls.get(name)
+                or self.config.provider.base_urls.get(provider_def.name)
+            )
+        base_url = custom_base_url or provider_def.base_url
+
         return self._create_protocol(
             protocol=provider_def.protocol,
             api_key=api_key,
-            base_url=provider_def.base_url,
+            base_url=base_url,
             extra_headers=provider_def.extra_headers,
         )
 

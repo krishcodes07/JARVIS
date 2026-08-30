@@ -41,11 +41,18 @@ STANDARD_BASE_URLS: dict[str, str] = {
 }
 
 
-def load_models_dev_cache() -> dict[str, Any]:
-    """Load models.dev catalog from local cache file.
+_MODELS_DEV_MEM_CACHE: dict[str, Any] | None = None
+
+
+def load_models_dev_cache(force_reload: bool = False) -> dict[str, Any]:
+    """Load models.dev catalog with in-memory caching for sub-millisecond API response times.
 
     If cache is missing or empty on first run, dynamically fetches it from models.dev API.
     """
+    global _MODELS_DEV_MEM_CACHE
+    if not force_reload and _MODELS_DEV_MEM_CACHE is not None:
+        return _MODELS_DEV_MEM_CACHE
+
     cache_file = get_cache_dir() / "models_dev_cache.json"
 
     # 1. Try reading from local cache file
@@ -54,6 +61,7 @@ def load_models_dev_cache() -> dict[str, Any]:
             with open(cache_file, encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict) and data:
+                    _MODELS_DEV_MEM_CACHE = data
                     return data
         except Exception as e:
             logger.warning(f"Failed loading models.dev cache from {cache_file}: {e}")
@@ -97,6 +105,8 @@ def load_models_dev_cache() -> dict[str, Any]:
 
 def save_models_dev_cache(data: dict[str, Any]) -> None:
     """Save models.dev data to local cache file in ~/.jarvis/workspace/cache/models_dev_cache.json."""
+    global _MODELS_DEV_MEM_CACHE
+    _MODELS_DEV_MEM_CACHE = data
     try:
         cache_file = get_cache_dir() / "models_dev_cache.json"
         cache_file.parent.mkdir(parents=True, exist_ok=True)

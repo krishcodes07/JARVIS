@@ -146,6 +146,7 @@ class ProviderConfig(BaseModel):
     reasoning_effort: str | None = None
     thinking_budget: int | None = None
     fallback: FallbackConfig = Field(default_factory=FallbackConfig)
+    base_urls: dict[str, str] = Field(default_factory=dict)
 
 
 class ConversationMemoryConfig(BaseModel):
@@ -223,6 +224,7 @@ class ToolsConfig(BaseModel):
             "web_search",
             "read_url",
             "get_skill",
+            "ask_user",
         ]
     )
     categories: dict[str, bool] = Field(
@@ -363,7 +365,12 @@ class WebConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
-    theme: str = "dark"
+    theme: str = "jarvis"  # jarvis | arc | cyberpunk | matrix | stealth
+    blob_style: str = "hologram"  # hologram | arc_reactor | particle | pulse
+    background_style: str = "ribbon-field"  # ribbon-field | amber-halftone | void-field | halftone-flow | data-pixel | dot-matrix | constellation | crt | flow-field | classic
+    animations: bool = True
+    sound_effects: bool = False
+    sidebar_expanded: bool = True
 
 
 class GUIConfig(BaseModel):
@@ -439,6 +446,7 @@ class JarvisMetaConfig(BaseModel):
     name: str = "JARVIS"
     version: str = "0.1.0"
     persona: str = "professional_assistant"
+    user_name: str = "Sir"
     log_level: str = "INFO"
 
 

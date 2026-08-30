@@ -47,6 +47,18 @@ def parse_args() -> argparse.Namespace:
         help="Path to jarvis.yaml config file",
     )
     parser.add_argument(
+        "--host",
+        type=str,
+        default=None,
+        help="Host address to bind Web UI / API server to (default: from config)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help="Port to run Web UI / API server on (default: from config)",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {_get_version()}",
@@ -94,6 +106,12 @@ async def _run(args: argparse.Namespace) -> None:
     # Setup logging
     log_level = "DEBUG" if args.debug else config.jarvis.log_level
     setup_logging(level=log_level)
+
+    # Apply CLI host/port overrides
+    if args.host is not None:
+        config.ui.web.host = args.host
+    if args.port is not None:
+        config.ui.web.port = args.port
 
     # Handle --connect service authentication
     if args.connect:

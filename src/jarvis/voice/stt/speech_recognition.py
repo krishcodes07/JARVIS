@@ -9,12 +9,48 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import tempfile
 from typing import Any
 
 from jarvis.core.exceptions import VoiceProviderError
 from jarvis.voice.base import BaseSTT
 
 logger = logging.getLogger(__name__)
+
+
+def _ensure_wav(path: str) -> str:
+    """Ensure audio file at path is converted to a valid PCM WAV file if needed."""
+    try:
+        import wave
+        with wave.open(path, "rb") as wf:
+            if wf.getnchannels() > 0:
+                return path
+    except Exception:
+        pass
+
+    # Attempt conversion with pydub
+    try:
+        from pydub import AudioSegment
+        seg = AudioSegment.from_file(path)
+        seg = seg.set_frame_rate(16000).set_channels(1).set_sample_width(2)
+        tmp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        seg.export(tmp_wav.name, format="wav")
+        return tmp_wav.name
+    except Exception as e:
+        logger.debug(f"Pydub audio conversion failed: {e}")
+
+    # Attempt conversion with soundfile
+    try:
+        import soundfile as sf
+        data, samplerate = sf.read(path)
+        tmp_wav = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
+        sf.write(tmp_wav.name, data, 16000, format="WAV", subtype="PCM_16")
+        return tmp_wav.name
+    except Exception as e:
+        logger.debug(f"Soundfile audio conversion failed: {e}")
+
+    return path
 
 
 class SpeechRecognitionProvider(BaseSTT):
@@ -50,10 +86,18 @@ class SpeechRecognitionProvider(BaseSTT):
     async def transcribe_file(self, path: str) -> str:
         import speech_recognition as sr
 
-        recognizer = self._build_recognizer()
-        with sr.AudioFile(path) as source:
-            audio_data = recognizer.record(source)
-        return await self._recognize(recognizer, audio_data)
+        wav_path = _ensure_wav(path)
+        try:
+            recognizer = self._build_recognizer()
+            with sr.AudioFile(wav_path) as source:
+                audio_data = recognizer.record(source)
+            return await self._recognize(recognizer, audio_data)
+        finally:
+            if wav_path != path and os.path.exists(wav_path):
+                try:
+                    os.remove(wav_path)
+                except Exception:
+                    pass
 
     async def _recognize(self, recognizer: Any, audio_data: Any) -> str:
         import speech_recognition as sr
