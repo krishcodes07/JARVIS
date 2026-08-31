@@ -48,7 +48,10 @@ JARVIS is built as a modular, production-grade AI assistant package with a clean
 - **Tool Engine (`src/jarvis/tools`)**: Includes basic utilities, desktop automation, dynamic MCP server creator (`mcp_creator`), filesystem operations, and system control tools running inside an optional security sandbox.
 - **MCP Subsystem (`src/jarvis/mcp`)**: Native Client & Manager for standard Model Context Protocol servers with dynamic registration and template generation.
 - **Voice Manager (`src/jarvis/voice`)**: Streaming text-to-speech (Edge TTS, ElevenLabs) with sentence/paragraph chunking and speech-to-text input (Google STT, Sphinx, Vosk, faster-whisper).
-- **UI Abstraction (`src/jarvis/ui`)**: Supports Textual-based TUI with in-app modals (Model Picker, API Key Connector, MCP Manager), FastAPI WebSockets Web UI, and Desktop GUI.
+- **UI Abstraction (`src/jarvis/ui`)**:
+  - **Terminal UI (TUI)**: Textual-based terminal application with in-app modals (Model Picker, API Key Connector, MCP Manager, Themes, Reasoning Effort).
+  - **Web UI (React SPA + FastAPI)**: Single-page application built with React 18, TypeScript, Tailwind CSS, Framer Motion, and ThreeUI WebGL procedural backgrounds, communicating over WebSocket streaming (`/ws/chat`) and REST APIs (`/api/`) with browser-native real-time STT and audio visualizers. See [Web UI Guide](guides/web_ui.md).
+  - **Desktop GUI**: Desktop interface (in development).
 
 ## Data Flow
 

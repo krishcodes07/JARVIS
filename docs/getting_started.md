@@ -5,8 +5,8 @@
 - **Python 3.11.4+**
 - An API key for at least one supported LLM provider (Groq, OpenAI, Anthropic, Google Gemini, NVIDIA NIM, OpenRouter, OpenCode Zen, TokenRouter, etc.)
 
-> [!IMPORTANT]
-> **Interface Status**: Currently, **only the Terminal UI (`tui`)** is active and under active development. The Web UI (`web`) and Desktop GUI (`gui`) options are in early development and not functional yet.
+> [!NOTE]
+> **Interface Status**: Both the **Terminal UI (`--ui tui`)** and the **Web UI (`--ui web`)** are active and fully supported. The Desktop GUI (`--ui gui`) is currently in development.
 
 ---
 
@@ -93,7 +93,20 @@ memory:
 
 ## Launching JARVIS
 
-### 1. Interactive Terminal UI (Default)
+### 1. Web UI (Modern React SPA Dashboard)
+
+Start the JARVIS Web UI server:
+
+```bash
+# Web UI (FastAPI backend + React SPA)
+python main.py --ui web
+# or
+python -m jarvis --ui web
+```
+
+Then open your browser to **`http://127.0.0.1:5000/`** for streaming chat, hands-free real-time voice mode, ThreeUI WebGL shader backgrounds, theme customizer, and comprehensive settings panels.
+
+### 2. Interactive Terminal UI (TUI)
 
 Start JARVIS using the interactive Terminal UI:
 
@@ -107,7 +120,7 @@ python -m jarvis --ui tui
 python main.py --debug
 ```
 
-### 2. Messaging Connector Bridges (Background / Service Mode)
+### 3. Messaging Connector Bridges (Background / Service Mode)
 
 Run JARVIS as a Telegram or Discord bot bridge:
 
@@ -127,6 +140,7 @@ python -m jarvis --connector all
 ## Documentation & Next Steps
 
 - Explore the [System Architecture](architecture.md)
+- Learn full [Web UI Guide](guides/web_ui.md)
 - Learn full [Configuration Reference](configuration.md)
 - Learn how to [Add New Providers](guides/adding_providers.md)
 - Learn how to [Create Custom Tools](guides/creating_tools.md)

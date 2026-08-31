@@ -21,25 +21,27 @@
 <p align="center">
   <a href="https://www.python.org/downloads/"><img alt="Python 3.11.4+" src="https://img.shields.io/badge/python-3.11.4%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" /></a>
   <a href="LICENSE"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" /></a>
+  <a href="https://react.dev"><img alt="React 18" src="https://img.shields.io/badge/Web_UI-React_18-61DAFB?style=for-the-badge&logo=react&logoColor=black" /></a>
   <a href="https://textual.textualize.io"><img alt="Textual TUI" src="https://img.shields.io/badge/TUI-Textual-blueviolet?style=for-the-badge" /></a>
   <a href="https://modelcontextprotocol.io"><img alt="MCP Supported" src="https://img.shields.io/badge/MCP-1.0-purple?style=for-the-badge" /></a>
-  <a href="https://github.com/krishcodes07/JARVIS"><img alt="Status: Active Alpha" src="https://img.shields.io/badge/status-active_alpha-orange?style=for-the-badge" /></a>
+  <a href="https://github.com/krishcodes07/JARVIS"><img alt="Status: Active" src="https://img.shields.io/badge/status-active-success?style=for-the-badge" /></a>
 </p>
 
 </div>
 
 [![JARVIS Terminal UI Preview](tui_preview.png)](tui_preview.png)
 
-> [!IMPORTANT]
-> **Project Development Status**: Currently, **only the Terminal UI (TUI)** is active and under active development. The **Web UI** and **Desktop GUI** are currently in the development phase and are not functional yet.
+> [!NOTE]
+> **Active Interfaces**: Both the **Web UI (`--ui web`)** (React 18 SPA + ThreeUI WebGL shaders + WebSockets) and the **Terminal UI (`--ui tui`)** (Textual) are active and fully supported! The Desktop GUI (`--ui gui`) is currently in development.
 
 ---
 
 ## Why J.A.R.V.I.S.?
 
-Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 180+ LLM providers via `models.dev` integration, interact via rich terminal TUI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
+Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 180+ LLM providers via `models.dev` integration, interact via rich terminal TUI or modern React Web UI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
 
 - **180+ LLM Provider Catalog (`models.dev`)** — Direct integration with 180+ LLM providers (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.) with automatic fallback streaming routing.
+- **Modern React Web UI & Real-Time Voice Overlay** — High-performance React SPA with WebSocket streaming, interactive Markdown, live tool execution pills, collapsible reasoning blocks, `ask_user` tool cards, 14+ themes, 9+ procedural ThreeUI WebGL shader backgrounds, and a full-screen voice mode with browser-native real-time STT and audio visualizers.
 - **Full PC Control & Autonomous Desktop Automation** — End-to-end multi-step OS control, Windows UI Automation (UIA) tree inspection, dynamic application discovery, smooth mouse/keyboard simulation, and global emergency abort safety (`Ctrl+Alt+Q`).
 - **Dynamic Reasoning Effort Control (`/effort`)** — Full `models.dev` catalog reasoning awareness. Configure reasoning effort (`low`, `medium`, `high`, `none`), disable thinking on configurable models while keeping inherent reasoning models running normally, with live footer badges and collapsible thought blocks.
 - **Git-Checkpoint Revert & Message Actions** — Click any conversation message to copy prompt/response, re-run turns, or revert both conversation state and workspace file modifications back to that exact checkpoint.
@@ -56,22 +58,24 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 
 | Component | Interface / Subsystem | Status | Technical Stack |
 | --- | --- | --- | --- |
-| **Terminal UI (TUI)** | Rich TUI Application | 🟢 **Active (In Dev)** | Python 3.11.4, Textual, Rich Markdown |
+| **Web UI** | Web Dashboard & Voice Overlay | 🟢 **Active** | React 18, TypeScript, Vite, Tailwind CSS, ThreeUI WebGL, FastAPI, WebSockets |
+| **Terminal UI (TUI)** | Rich TUI Application | 🟢 **Active** | Python 3.11.4, Textual, Rich Markdown |
 | **Desktop Automation** | Autonomous PC Control & Actuation | 🟢 **Active** | Windows UIA, PyAutoGUI, PyWinAuto, ScreenInfo, Pynput |
 | **Messaging Connectors** | Telegram & Discord Bridges | 🟢 **Active** | `python-telegram-bot`, `discord.py`, Asyncio |
-| **Web UI** | Web Dashboard | 🟡 *In Development (Non-functional)* | FastAPI, Uvicorn, WebSockets, Jinja2 |
-| **Desktop GUI** | Desktop Window | 🟡 *In Development (Non-functional)* | CustomTkinter / PySide6, Asyncio integration |
+| **Desktop GUI** | Desktop Window | 🟡 *In Development* | CustomTkinter / PySide6, Asyncio integration |
 | **Core Engine** | Orchestration & Events | 🟢 **Active** | Asyncio Event Bus, Pydantic v2 Config |
 | **Skills Subsystem** | Specialized Prompt Modules | 🟢 **Active** | Structured prompts, auto-discovery runner |
 | **Memory System** | Short & Long-term RAG | 🟢 **Active** | JSON session storage, ChromaDB Vector Store |
 | **MCP Manager** | Protocol Integration | 🟢 **Active** | Stdio transport, MCP SDK 1.0+, NPX runners |
-| **Voice Suite** | Speech Input / Output | 🟢 **Active** | Edge TTS, ElevenLabs, SpeechRecognition, `faster-whisper` |
+| **Voice Suite** | Speech Input / Output | 🟢 **Active** | Edge TTS, ElevenLabs, Web Speech API, SpeechRecognition |
 
 ---
 
 ## Features
 
 - **Interactive First-Time Setup Wizard** — Interactive onboarding CLI (`python setup.py` or `python -m jarvis --setup`) with live API key testing, model validation, and offline embedding initialization.
+- **Modern Web UI Dashboard** — Web application (`python main.py --ui web`) accessible from any browser with real-time streaming chat, collapsible `<think>` blocks, live tool badges, audio-reactive Orb, 14+ themes, customizable ThreeUI shaders, opacity slider, session manager, and settings dialogs.
+- **Hands-Free Real-Time Voice Chat** — Dedicated full-screen voice mode with browser-native real-time STT streaming, pause-detection auto-send, and early sentence TTS playback.
 - **OAuth 2.0 Loopback & Personal Service Auth** — Native browser OAuth 2.0 flow for Google (Gmail & Google Calendar) and Telethon MTProto authentication for personal Telegram accounts via `python main.py --connect <service>`.
 - **Autonomous PC Control & Desktop Automation** — Multi-step desktop control via native tools (`app_control`, `window_control`, `browser_control`, `input_simulation`), launch & control apps, browse websites, manage window layouts, and simulate mouse/keyboard with emergency abort failsafes (`Ctrl+Alt+Q`).
 - **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), provider connector (`/connect`), sessions manager (`Ctrl+S`), reasoning effort selector (`/effort`), MCP manager modal (`Ctrl+P` or `/mcp`), theme customizer (`/theme`), and voice controls (`Alt+V`).
@@ -143,7 +147,26 @@ pip install -e ".[automation,voice,dev]"
 
 ## Running JARVIS
 
-### 1. Terminal UI (Active Interactive Interface)
+### 1. Web UI Dashboard (Recommended Browser Experience)
+
+Launch the modern React Web UI and FastAPI backend server:
+
+```bash
+# Launch Web UI (defaults to http://127.0.0.1:5000/)
+python main.py --ui web
+# or
+python -m jarvis --ui web
+```
+
+Open **`http://127.0.0.1:5000/`** to access:
+- **Streaming Chat** with markdown rendering, syntax highlighting, and collapsible `<think>` blocks.
+- **Hands-Free Voice Chat** with browser-native real-time STT streaming, pause detection auto-send, and sentence-level TTS playback.
+- **Visual Themes & Backgrounds**: 14+ themes, customizable ThreeUI WebGL shaders (Ribbon Field, Amber Halftone, Void Field, etc.), and background opacity slider.
+- **Full Settings Suite**: Model selection (180+ providers from `models.dev`), Appearance, Voice, MCP servers, Telegram/Discord connectors, Memory inspector, Skills, and Tools.
+
+### 2. Interactive Terminal UI (TUI)
+
+Launch the interactive Textual terminal interface:
 
 ```bash
 # Launch interactive TUI
@@ -155,7 +178,7 @@ python -m jarvis --ui tui
 python main.py --debug
 ```
 
-### 2. Standalone Messaging Connector Services
+### 3. Standalone Messaging Connector Services
 
 Run JARVIS as a background messaging bridge service:
 
@@ -169,9 +192,6 @@ python -m jarvis --connector discord
 # Run all enabled messaging bridges simultaneously
 python -m jarvis --connector all
 ```
-
-> [!NOTE]
-> Web UI (`--ui web`) and Desktop GUI (`--ui gui`) flags exist in CLI but are currently under development. Please use the TUI (`--ui tui`) interface or the Messaging Connectors (`--connector <name>`).
 
 ---
 
@@ -427,6 +447,7 @@ docker compose up --build
 | --- | --- |
 | **System Architecture** | [docs/architecture.md](docs/architecture.md) |
 | **Getting Started Guide** | [docs/getting_started.md](docs/getting_started.md) |
+| **Web UI Guide** | [docs/guides/web_ui.md](docs/guides/web_ui.md) |
 | **Configuration Reference** | [docs/configuration.md](docs/configuration.md) |
 | **Adding a Provider** | [docs/guides/adding_providers.md](docs/guides/adding_providers.md) |
 | **Creating Custom Tools** | [docs/guides/creating_tools.md](docs/guides/creating_tools.md) |
