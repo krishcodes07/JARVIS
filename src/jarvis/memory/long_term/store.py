@@ -101,7 +101,18 @@ class LongTermStore(BaseMemory):
             }
         await self._persist()
 
-    async def retrieve(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
+    async def retrieve(self, key: str) -> Any:
+        """Retrieve a memory entry by key.
+
+        Args:
+            key: Unique memory key.
+
+        Returns:
+            Memory entry dict if found, None otherwise.
+        """
+        return self.get(key)
+
+    async def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         """Retrieve memories relevant to a query by keyword overlap.
 
         Scores each memory on how many of the query's significant words it
@@ -146,10 +157,19 @@ class LongTermStore(BaseMemory):
         scored.sort(key=lambda pair: pair[0], reverse=True)
         return [entry for _, entry in scored[: max(1, max_results)]]
 
+    def get(self, key: str) -> dict[str, Any] | None:
+        """Get a memory by key, returning None if not found."""
+        entry = self._memories.get(key)
+        if entry is None:
+            return None
+        return {"key": key, **entry}
+
     async def delete(self, key: str) -> None:
         """Delete a memory by key."""
+        existed = key in self._memories
         self._memories.pop(key, None)
-        await self._persist()
+        if existed:
+            await self._persist()
 
     async def flush(self) -> None:
         """Persist memories to disk."""

@@ -12,14 +12,13 @@ call before it is written, and the result is a validated
 config fields appear automatically instead of silently going missing.
 
 Steps:
-1. Assistant identity
+1. Identity & user name
 2. Primary AI provider & API key
 3. Primary AI model
 4. Long-term memory extraction provider & model
 5. Vector memory embedding backend (local or remote)
 6. Voice provider & voice selection
-7. Default user interface
-8. Review & save
+7. Default user interface & review/save
 """
 
 from __future__ import annotations
@@ -41,6 +40,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, DownloadColumn, Progress, TextColumn
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
+from rich.text import Text
 
 from jarvis.core.config import JarvisConfig, get_jarvis_home, save_api_key_to_env
 from jarvis.providers.models_dev import (
@@ -60,7 +60,40 @@ from jarvis.setup.validation import (
 
 console = Console()
 
-TOTAL_STEPS = 8
+TOTAL_STEPS = 7
+
+# ═══════════════════════════════════════════════════════════════
+# Visual constants
+# ═══════════════════════════════════════════════════════════════
+
+_JARVIS_BANNER = r"""
+[bold cyan]     ██╗ █████╗ ██████╗ ██╗   ██╗██╗███████╗[/bold cyan]
+[bold cyan]     ██║██╔══██╗██╔══██╗██║   ██║██║██╔════╝[/bold cyan]
+[bold cyan]     ██║███████║██████╔╝██║   ██║██║███████╗[/bold cyan]
+[bold cyan]██   ██║██╔══██║██╔══██╗╚██╗ ██╔╝██║╚════██║[/bold cyan]
+[bold cyan]╚█████╔╝██║  ██║██║  ██║ ╚████╔╝ ██║███████║[/bold cyan]
+[bold cyan] ╚════╝ ╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚═╝╚══════╝[/bold cyan]
+"""
+
+_STEP_ICONS = {
+    1: "👤",
+    2: "🔌",
+    3: "🤖",
+    4: "🧠",
+    5: "📐",
+    6: "🔊",
+    7: "💾",
+}
+
+_STEP_COLORS = {
+    1: "#38bdf8",  # sky blue
+    2: "#a78bfa",  # violet
+    3: "#f472b6",  # pink
+    4: "#fb923c",  # orange
+    5: "#34d399",  # emerald
+    6: "#facc15",  # yellow
+    7: "#4ade80",  # green
+}
 
 # Sentinel choice id: not a real model, so the selector hides its "(id)" suffix.
 _LOCAL_EMBEDDING = "__local__"
@@ -713,12 +746,39 @@ async def _choose_voice(config: JarvisConfig) -> None:
 # ═══════════════════════════════════════════════════════════════
 
 
+def _progress_bar(step: int) -> Text:
+    """Build a visual progress bar for the current step."""
+    filled = "━" * (step * 4)
+    empty = "━" * ((TOTAL_STEPS - step) * 4)
+    color = _STEP_COLORS.get(step, "#38bdf8")
+    bar = Text()
+    bar.append(filled, style=f"bold {color}")
+    bar.append(empty, style="dim #334155")
+    bar.append(f"  {step}/{TOTAL_STEPS}", style=f"bold {color}")
+    return bar
+
+
 def _header(step: int, title: str, context: str = "") -> None:
-    """Clear the screen and print a step header."""
+    """Clear the screen and print a step header with progress bar."""
     console.clear()
+    icon = _STEP_ICONS.get(step, "⚙️")
+    color = _STEP_COLORS.get(step, "#38bdf8")
+
+    # Mini JARVIS wordmark + progress
+    console.print(f"[bold cyan]  ⚡ JARVIS Setup[/bold cyan]  ", end="")
+    console.print(_progress_bar(step))
+    console.print()
+
     if context:
-        console.print(f"[bold cyan]{context}[/bold cyan]\n")
-    console.print(f"[bold yellow]Step {step}/{TOTAL_STEPS}: {title}[/bold yellow]")
+        console.print(f"  [dim]{context}[/dim]")
+
+    console.print(
+        Panel(
+            f"[bold {color}]{icon}  {title}[/bold {color}]",
+            border_style=color,
+            padding=(0, 2),
+        )
+    )
 
 
 async def run_setup_wizard() -> bool:
@@ -729,47 +789,72 @@ async def run_setup_wizard() -> bool:
         provider catalog could not be loaded.
     """
     console.clear()
-    with console.status("[cyan]Loading the models.dev provider catalog…[/cyan]"):
+
+    # ── Splash screen ──
+    console.print(_JARVIS_BANNER)
+    console.print(
+        Panel(
+            "[bold white]Just A Rather Very Intelligent System[/bold white]\n"
+            "[dim #94a3b8]Interactive first-time setup · All choices are verified before saving[/dim #94a3b8]",
+            border_style="cyan",
+            padding=(1, 4),
+            title="[bold cyan]⚡ First-Time Setup[/bold cyan]",
+            title_align="center",
+            subtitle="[dim]Press Enter to begin[/dim]",
+            subtitle_align="center",
+        )
+    )
+    console.print()
+
+    with console.status("[cyan]  Loading the models.dev provider catalog…[/cyan]"):
         catalog = load_models_dev_cache()
 
     if not catalog:
         console.print(
-            "[red]✗ Could not load the provider catalog from models.dev.[/red]\n"
-            "[dim]Check your internet connection and try again.[/dim]"
+            Panel(
+                "[red]✗ Could not load the provider catalog from models.dev.[/red]\n"
+                "[dim]Check your internet connection and try again.[/dim]",
+                border_style="red",
+                title="[red]Error[/red]",
+            )
         )
         return False
+
+    console.print(
+        f"  [green]✓[/green] [bold white]{len(catalog)}[/bold white]"
+        " [dim]providers loaded from models.dev[/dim]\n"
+    )
 
     # Every default comes from the schema, so new config fields are picked up
     # automatically instead of being dropped by a hand-written template.
     config = JarvisConfig()
+    assistant_name = "JARVIS"
+    config.jarvis.name = assistant_name
 
     # ── Step 1: Identity ──
-    console.print(
-        Panel.fit(
-            "[bold cyan]⚡ JARVIS — First-Time Setup[/bold cyan]\n"
-            f"[dim]{len(catalog)} providers loaded. Everything below is verified"
-            " before it is saved.[/dim]",
-            border_style="cyan",
-        )
-    )
+    _header(1, "Identity & User Name")
     console.print()
-    console.print(f"[bold yellow]Step 1/{TOTAL_STEPS}: Identity & User Name[/bold yellow]")
+    console.print(
+        "  [dim]JARVIS needs to know how to address you. You can change this later[/dim]"
+        "  [dim]in [cyan]jarvis.yaml[/cyan].[/dim]\n"
+    )
     user_name = (
-        Prompt.ask("What is your name? (How should JARVIS address you?)", default="Sir").strip()
+        Prompt.ask(
+            "  [bold #38bdf8]What is your name?[/bold #38bdf8]"
+            " [dim](How should JARVIS address you?)[/dim]",
+            default="Sir",
+        ).strip()
         or "Sir"
     )
     config.jarvis.user_name = user_name
-    assistant_name = (
-        Prompt.ask("What do you want to name your assistant?", default=config.jarvis.name).strip()
-        or config.jarvis.name
-    )
-    config.jarvis.name = assistant_name
+    console.print(f"\n  [green]✓[/green] [bold white]Welcome, {user_name}![/bold white]")
+    console.print(f"  [dim]Your assistant: [bold cyan]{assistant_name}[/bold cyan][/dim]")
 
     # ── Step 2: Primary provider ──
-    _header(2, "Primary AI Provider", f"Assistant: {assistant_name}")
+    _header(2, "Primary AI Provider", f"User: {user_name}  ·  Assistant: {assistant_name}")
     console.print(
-        "[dim]Providers with credentials already configured are listed first. "
-        "Type to search all providers.[/dim]"
+        "\n  [dim]Providers with credentials already configured are listed first.[/dim]"
+        "\n  [dim]Type to search all providers. Use ↑/↓ to navigate.[/dim]\n"
     )
 
     provider_choice = await interactive_select(
@@ -785,8 +870,8 @@ async def run_setup_wizard() -> bool:
 
     _header(
         2,
-        f"API Key for {primary_provider_name}",
-        f"Assistant: {assistant_name}  |  Provider: {primary_provider_name}",
+        f"API Key — {primary_provider_name}",
+        f"Provider: {primary_provider_name}",
     )
     console.print()
     primary_connected = await _collect_credentials(primary_provider_id, catalog)
@@ -795,10 +880,10 @@ async def run_setup_wizard() -> bool:
     while True:
         _header(
             3,
-            f"Primary Model for {primary_provider_name}",
-            f"Assistant: {assistant_name}  |  Provider: {primary_provider_name}",
+            f"Primary Model — {primary_provider_name}",
+            f"Provider: {primary_provider_name}",
         )
-        console.print("[dim]Newest models first. Type to search.[/dim]")
+        console.print("\n  [dim]Newest models first. Type to search, ↑/↓ to navigate.[/dim]\n")
 
         model_items = _model_choices(primary_data.get("models") or {})
         if not model_items:
@@ -836,11 +921,11 @@ async def run_setup_wizard() -> bool:
     _header(
         4,
         "Long-Term Memory Extraction",
-        f"Primary LLM: {primary_provider_name} ({primary_model_id})",
+        f"Primary: {primary_provider_name} / {primary_model_id}",
     )
     console.print(
-        "[dim]JARVIS extracts durable facts and preferences from conversations with an LLM. "
-        "A small, fast model is usually the best choice here.[/dim]\n"
+        "\n  [dim]JARVIS extracts durable facts and preferences from conversations using an LLM.[/dim]"
+        "\n  [dim]A small, fast model is usually the best choice here.[/dim]\n"
     )
 
     if Confirm.ask(
@@ -895,19 +980,19 @@ async def run_setup_wizard() -> bool:
             memory_provider_id, memory_model_id = primary_provider_id, primary_model_id
 
     # ── Step 5: Embeddings ──
-    _header(5, "Vector / Semantic Memory Embeddings", f"Assistant: {assistant_name}")
+    _header(5, "Vector / Semantic Memory", f"Embeddings for {assistant_name}'s knowledge base")
     backend, embed_provider, embed_model = await _choose_embedding(catalog, primary_provider_id)
     config.memory.vector.embedding_backend = backend
     config.memory.vector.embedding_provider = embed_provider
     config.memory.vector.embedding_model = embed_model
 
     # ── Step 6: Voice ──
-    _header(6, "Voice & Text-to-Speech", f"Assistant: {assistant_name}")
+    _header(6, "Voice & Text-to-Speech", f"Give {assistant_name} a voice")
     console.print()
     await _choose_voice(config)
 
-    # ── Step 7: Default UI ──
-    _header(7, "Default User Interface", f"Assistant: {assistant_name}")
+    # ── Step 7: Default UI & Review ──
+    _header(7, "Default User Interface", "Choose how to interact with JARVIS")
     console.print()
     ui_choice = await interactive_select(
         "Select Default Interface",
@@ -920,9 +1005,12 @@ async def run_setup_wizard() -> bool:
     )
     config.ui.default = ui_choice[0] if ui_choice else config.ui.default
 
-    # ── Step 8: Review & save ──
+    # ── Review & save ──
     console.clear()
-    console.print(f"[bold yellow]Step 8/{TOTAL_STEPS}: Review & Save[/bold yellow]\n")
+    console.print(f"[bold cyan]  ⚡ JARVIS Setup[/bold cyan]  ", end="")
+    bar = _progress_bar(TOTAL_STEPS)
+    console.print(bar)
+    console.print()
 
     config_file = get_jarvis_home() / "config" / "jarvis.yaml"
     if backend == "local":
@@ -930,54 +1018,82 @@ async def run_setup_wizard() -> bool:
     else:
         embedding_summary = f"{embed_model} via {embed_provider}"
 
-    table = Table(title=f"📋 {assistant_name} Configuration", border_style="cyan")
-    table.add_column("Setting", style="bold yellow")
-    table.add_column("Value", style="bold white")
-    table.add_row("Assistant Name", assistant_name)
-    table.add_row("Primary Provider", f"{primary_provider_name} ({primary_provider_id})")
-    table.add_row("Primary Model", primary_model_id)
-    table.add_row("Max Output Tokens", str(config.provider.max_tokens))
-    table.add_row(
-        "Memory Extraction",
-        f"{memory_model_id} via {memory_provider_id}"
-        + (" (follows active provider)" if not config.memory.long_term.provider else ""),
+    table = Table(
+        title="📋 Configuration Review",
+        border_style="#38bdf8",
+        title_style="bold #38bdf8",
+        show_lines=True,
+        padding=(0, 2),
     )
-    table.add_row("Embeddings", embedding_summary)
+    table.add_column("Setting", style="bold #facc15", min_width=22)
+    table.add_column("Value", style="bold white", min_width=40)
+
+    table.add_row("👤  User Name", f"[bold]{user_name}[/bold]")
+    table.add_row("🤖  Assistant", f"[bold cyan]{assistant_name}[/bold cyan]")
     table.add_row(
-        "Voice",
-        f"{config.voice.tts.provider} · {config.voice.tts.voice}"
+        "🔌  Primary Provider",
+        f"[bold]{primary_provider_name}[/bold] [dim]({primary_provider_id})[/dim]",
+    )
+    table.add_row("🧠  Primary Model", f"[bold]{primary_model_id}[/bold]")
+    table.add_row("📊  Max Output Tokens", str(config.provider.max_tokens))
+    table.add_row(
+        "💭  Memory Extraction",
+        f"[bold]{memory_model_id}[/bold] [dim]via {memory_provider_id}[/dim]"
+        + (" [dim](follows active)[/dim]" if not config.memory.long_term.provider else ""),
+    )
+    table.add_row("📐  Embeddings", embedding_summary)
+    table.add_row(
+        "🔊  Voice",
+        f"[bold]{config.voice.tts.provider}[/bold] · {config.voice.tts.voice}"
         if config.voice.enabled
-        else "disabled",
+        else "[dim]disabled[/dim]",
     )
-    table.add_row("Default UI", config.ui.default.upper())
-    table.add_row("Config File", str(config_file))
-    table.add_row("Environment File", str(get_jarvis_home() / ".env"))
+    table.add_row("🖥️   Default UI", f"[bold]{config.ui.default.upper()}[/bold]")
+    table.add_row("📁  Config File", f"[dim]{config_file}[/dim]")
+    table.add_row("🔑  Environment File", f"[dim]{get_jarvis_home() / '.env'}[/dim]")
     console.print(table)
     console.print()
 
-    if not Confirm.ask("Save configuration and complete setup?", default=True):
-        console.print("[yellow]Setup cancelled. Nothing was written.[/yellow]")
+    if not Confirm.ask(
+        "  [bold #4ade80]Save configuration and complete setup?[/bold #4ade80]", default=True
+    ):
+        console.print("  [yellow]Setup cancelled. Nothing was written.[/yellow]")
         return False
 
     # Saved through the schema, so the file always matches what JARVIS can load.
     config.save(config_file)
 
     console.clear()
+    console.print(_JARVIS_BANNER)
     console.print(
-        Panel.fit(
-            f"[bold green]🎉 {assistant_name} is ready![/bold green]\n\n"
-            f"[bold white]🚀 Start {assistant_name}:[/bold white]\n"
-            f"   [cyan]python main.py[/cyan]\n\n"
-            f"[bold white]💬 Run a messaging bridge:[/bold white]\n"
-            f"   [cyan]python main.py --connector telegram[/cyan]\n\n"
-            "[bold white]🔌 Connect MCP servers (Gmail, Telegram…):[/bold white]\n"
-            "   [cyan]python main.py --connect gmail[/cyan]"
-            " [dim]or open /mcp inside the TUI[/dim]\n\n"
-            f"[bold white]⚙️  Re-run this wizard anytime:[/bold white]\n"
-            f"   [cyan]python main.py --setup[/cyan]",
+        Panel(
+            "[bold green]✨ Setup Complete — JARVIS is ready![/bold green]\n"
+            f"[dim]Configuration saved for user [bold]{user_name}[/bold][/dim]",
             border_style="green",
+            padding=(1, 4),
+            title="[bold green]🎉 Success[/bold green]",
+            title_align="center",
         )
     )
+    console.print()
+
+    # Quick-start commands
+    commands = Table(
+        show_header=False,
+        border_style="#334155",
+        padding=(0, 2),
+        title="[bold white]Quick Start[/bold white]",
+        title_style="bold white",
+    )
+    commands.add_column("Action", style="bold white", min_width=20)
+    commands.add_column("Command", style="bold cyan", min_width=38)
+    commands.add_row("🚀 Launch JARVIS", "python main.py")
+    commands.add_row("💬 Messaging bridge", "python main.py --connector telegram")
+    commands.add_row("🔌 Connect services", "python main.py --connect gmail")
+    commands.add_row("⚙️  Re-run setup", "python main.py --setup")
+    console.print(commands)
+    console.print()
+
     return True
 
 

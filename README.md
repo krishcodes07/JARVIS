@@ -38,9 +38,9 @@
 
 ## Why J.A.R.V.I.S.?
 
-Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 180+ LLM providers via `models.dev` integration, interact via rich terminal TUI or modern React Web UI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
+Most AI assistants lock you into a single provider, restrict your choice of interfaces, or hide key infrastructure behind vendor paywalls. **JARVIS gives you absolute control over your AI environment.** Query 200+ LLM providers via `models.dev` integration, interact via rich terminal TUI or modern React Web UI, extend functionality with Model Context Protocol (MCP) servers, and control everything hands-free with real-time streaming voice.
 
-- **180+ LLM Provider Catalog (`models.dev`)** — Direct integration with 180+ LLM providers (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.) with automatic fallback streaming routing.
+- **200+ LLM Provider Catalog (`models.dev`)** — Direct integration with 200+ LLM providers (OpenAI, Anthropic, Google Gemini, Groq, NVIDIA NIM, OpenRouter, Mistral, OpenCode, TokenRouter, Kilo, Cerebras, etc.) with automatic fallback streaming routing.
 - **Modern React Web UI & Real-Time Voice Overlay** — High-performance React SPA with WebSocket streaming, interactive Markdown, live tool execution pills, collapsible reasoning blocks, `ask_user` tool cards, 14+ themes, 9+ procedural ThreeUI WebGL shader backgrounds, and a full-screen voice mode with browser-native real-time STT and audio visualizers.
 - **Full PC Control & Autonomous Desktop Automation** — End-to-end multi-step OS control, Windows UI Automation (UIA) tree inspection, dynamic application discovery, smooth mouse/keyboard simulation, and global emergency abort safety (`Ctrl+Alt+Q`).
 - **Dynamic Reasoning Effort Control (`/effort`)** — Full `models.dev` catalog reasoning awareness. Configure reasoning effort (`low`, `medium`, `high`, `none`), disable thinking on configurable models while keeping inherent reasoning models running normally, with live footer badges and collapsible thought blocks.
@@ -80,7 +80,7 @@ Most AI assistants lock you into a single provider, restrict your choice of inte
 - **Autonomous PC Control & Desktop Automation** — Multi-step desktop control via native tools (`app_control`, `window_control`, `browser_control`, `input_simulation`), launch & control apps, browse websites, manage window layouts, and simulate mouse/keyboard with emergency abort failsafes (`Ctrl+Alt+Q`).
 - **Terminal TUI Experience** — Rich, interactive terminal interface (`python main.py`) with real-time streaming, command history, model search modal (`Ctrl+M`), provider connector (`/connect`), sessions manager (`Ctrl+S`), reasoning effort selector (`/effort`), MCP manager modal (`Ctrl+P` or `/mcp`), theme customizer (`/theme`), and voice controls (`Alt+V`).
 - **Dynamic Messaging Connectors (Telegram & Discord)** — Auto-discovered messaging bridges from `jarvis/connectors` and `~/.jarvis/connectors/` with channel/user allowlists, message chunking, typing indicators, and session persistence.
-- **180+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fault-tolerant fallback routing.
+- **200+ LLM Provider Backends** — Powered by the `models.dev` catalog with automatic provider protocol detection (OpenAI, Anthropic, Google Gemini) and automatic fault-tolerant fallback routing.
 - **Offline & Multi-Backend Vector Memory** — ChromaDB vector memory with bundled ONNX `all-MiniLM-L6-v2` offline embeddings (zero API key needed) and automatic remote-to-local fallback.
 - **Dynamic MCP Creator & Registry** — In-chat MCP tool generation and runtime server registration (`~/.jarvis/mcp/servers.json`) for npm, uvx, and python MCP servers.
 - **Specialized Skills Engine** — Built-in autonomous skills for `coding`, `bug-hunting`, `code-review`, `data-analysis`, `deep-research`, `find-mcp`, `frontend-design`, and `system-architecture`.
@@ -162,7 +162,7 @@ Open **`http://127.0.0.1:5000/`** to access:
 - **Streaming Chat** with markdown rendering, syntax highlighting, and collapsible `<think>` blocks.
 - **Hands-Free Voice Chat** with browser-native real-time STT streaming, pause detection auto-send, and sentence-level TTS playback.
 - **Visual Themes & Backgrounds**: 14+ themes, customizable ThreeUI WebGL shaders (Ribbon Field, Amber Halftone, Void Field, etc.), and background opacity slider.
-- **Full Settings Suite**: Model selection (180+ providers from `models.dev`), Appearance, Voice, MCP servers, Telegram/Discord connectors, Memory inspector, Skills, and Tools.
+- **Full Settings Suite**: Model selection (200+ providers from `models.dev`), Appearance, Voice, MCP servers, Telegram/Discord connectors, Memory inspector, Skills, and Tools.
 
 ### 2. Interactive Terminal UI (TUI)
 
@@ -197,20 +197,20 @@ python -m jarvis --connector all
 
 ## LLM Provider Architecture & Ecosystem
 
-JARVIS features an enterprise-grade, multi-provider LLM routing architecture powered by the dynamic **[`models.dev`](https://models.dev)** catalog. With support for **180+ cloud and local LLM providers** and thousands of models, JARVIS offers universal model compatibility, native tool calling, streaming reasoning extraction, and automated fault-tolerant fallback.
+JARVIS features an enterprise-grade, multi-provider LLM routing architecture powered by the dynamic **[`models.dev`](https://models.dev)** catalog. With support for **200+ cloud and local LLM providers** and thousands of models, JARVIS offers universal model compatibility, native tool calling, streaming reasoning extraction, and automated fault-tolerant fallback.
 
 ### Universal Protocol Coverage
 
-Instead of hardcoding a limited list of providers, JARVIS dynamically queries the **[`models.dev`](https://models.dev)** catalog—giving you immediate access to **180+ providers** and thousands of models. Every provider in the catalog automatically maps to one of JARVIS's three unified protocol engines:
+Instead of hardcoding a limited list of providers, JARVIS dynamically queries the **[`models.dev`](https://models.dev)** catalog—giving you immediate access to **200+ providers** and thousands of models. Every provider in the catalog automatically maps to one of JARVIS's three unified protocol engines:
 
-| Protocol Engine | Ecosystem & Coverage (180+ Providers) | Tool Calling | Streaming | Reasoning Extraction (`<think>`) | Embeddings |
+| Protocol Engine | Ecosystem & Coverage (200+ Providers) | Tool Calling | Streaming | Reasoning Extraction (`<think>`) | Embeddings |
 | --- | --- | :---: | :---: | :---: | :---: |
 | **OpenAI-Compatible (`openai`)** | **170+ Providers** (OpenAI, Groq, DeepSeek, NVIDIA NIM, OpenRouter, Mistral, Together AI, xAI, Cerebras, OpenCode Zen, TokenRouter, Ollama, vLLM, LM Studio, etc.) | ✅ Native | ✅ SSE | ✅ (`reasoning_content` / `reasoning`) | ✅ `/embeddings` |
 | **Anthropic (`anthropic`)** | Anthropic Claude APIs (Claude 3.5 / 3.7 Sonnet, Claude Opus 4, Claude Haiku, etc.) | ✅ Native | ✅ SSE | ✅ (`thinking` blocks) | ❌ |
 | **Google Gemini (`google`)** | Google Generative AI & Vertex AI (Gemini 2.5 Pro / Flash, Gemini 2.0 Flash Thinking, etc.) | ✅ Native | ✅ SSE | ✅ (`thought: true` parts) | ✅ `/models:embedContent` |
 
 > [!TIP]
-> **Zero-Code Provider Addition**: Because JARVIS fetches provider definitions and models dynamically from `models.dev`, you can use any of the 180+ providers simply by setting its respective API key in your `.env` file or via the in-app connector (`Ctrl+A`). Custom and local endpoints (like Ollama or vLLM) can also be added via `config/providers.json` with zero Python code changes!
+> **Zero-Code Provider Addition**: Because JARVIS fetches provider definitions and models dynamically from `models.dev`, you can use any of the 200+ providers simply by setting its respective API key in your `.env` file or via the in-app connector (`Ctrl+A`). Custom and local endpoints (like Ollama or vLLM) can also be added via `config/providers.json` with zero Python code changes!
 
 ---
 
@@ -242,7 +242,7 @@ JARVIS implements three specialized protocol drivers that normalize requests, re
 ### Key Architectural Capabilities
 
 #### 🔄 Dynamic models.dev Catalog & Local Caching
-JARVIS fetches and caches metadata for **180+ providers** and their full model rosters from [`https://models.dev/api.json`](https://models.dev/api.json). The catalog is stored locally in `~/.jarvis/workspace/cache/models_dev_cache.json` (with repository fallback in `data/models_dev_cache.json`), enabling offline boot, context limit detection, and credential field validation without manual configuration.
+JARVIS fetches and caches metadata for **200+ providers** and their full model rosters from [`https://models.dev/api.json`](https://models.dev/api.json). The catalog is stored locally in `~/.jarvis/workspace/cache/models_dev_cache.json` (with repository fallback in `data/models_dev_cache.json`), enabling offline boot, context limit detection, and credential field validation without manual configuration.
 
 #### ⚡ Connected Provider Auto-Discovery & Smart Boot
 At startup, JARVIS checks environment variables and `.env` files across both the repository root and `~/.jarvis/.env`. If the configured default provider does not have an active API key, JARVIS **automatically falls back to the first available connected provider**, ensuring zero-downtime startup.

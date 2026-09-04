@@ -248,7 +248,7 @@ class MemoryManager:
 
         if self.long_term:
             try:
-                results.extend(await self.long_term.retrieve(query, max_results))
+                results.extend(await self.long_term.search(query, max_results))
             except Exception as e:
                 logger.warning(f"Long-term keyword search failed: {e}")
 
@@ -338,24 +338,137 @@ class MemoryManager:
             logger.info(f"Indexed {total} knowledge base chunks.")
         return total
 
+    async def save_memory(
+        self,
+        key: str,
+        content: str,
+        category: str = "fact",
+        session_id: str = "",
+    ) -> None:
+        """Store a new long-term memory across keyword and vector stores.
+
+        Args:
+            key: Unique identifier for the memory.
+            content: The text content of the memory.
+            category: Type of memory (fact, preference, instruction, identity, project).
+            session_id: The session originating the memory.
+        """
+        lt = self.long_term
+        if lt is None or not content:
+            return
+
+        await lt.store(key, {
+            "content": content,
+            "category": category,
+            "source": session_id,
+        })
+        if self.vector:
+            await self.vector.store(
+                f"ltm_{key}",
+                {
+                    "content": content,
+                    "metadata": {
+                        "category": category,
+                        "type": "long_term",
+                        "source": session_id,
+                        "memory_key": key,
+                    },
+                },
+            )
+
+    async def edit_memory(
+        self,
+        key: str,
+        content: str,
+        category: str = "fact",
+        session_id: str = "",
+    ) -> bool:
+        """Edit an existing long-term memory across keyword and vector stores.
+
+        Args:
+            key: Unique identifier of the memory to update.
+            content: New content for the memory.
+            category: Type of memory.
+            session_id: The session originating the edit.
+
+        Returns:
+            True if memory was updated.
+        """
+        lt = self.long_term
+        if lt is None or not key or not content:
+            return False
+
+        old_memory = lt.get(key)
+        await lt.store(key, {
+            "content": content,
+            "category": category,
+            "source": session_id,
+        })
+
+        if self.vector:
+            if old_memory and old_memory.get("content"):
+                import hashlib
+                old_hash = hashlib.sha1(old_memory["content"].encode("utf-8")).hexdigest()[:32]
+                await self.vector.delete(old_hash)
+            await self.vector.store(
+                f"ltm_{key}",
+                {
+                    "content": content,
+                    "metadata": {
+                        "category": category,
+                        "type": "long_term",
+                        "source": session_id,
+                        "memory_key": key,
+                    },
+                },
+            )
+        return True
+
+    async def delete_memory(self, key: str) -> bool:
+        """Delete an existing long-term memory across keyword and vector stores.
+
+        Args:
+            key: Unique identifier of the memory to delete.
+
+        Returns:
+            True if memory was found and deleted.
+        """
+        lt = self.long_term
+        if lt is None or not key:
+            return False
+
+        old_memory = lt.get(key)
+        await lt.delete(key)
+
+        if self.vector:
+            await self.vector.delete(f"ltm_{key}")
+            if old_memory and old_memory.get("content"):
+                import hashlib
+                old_hash = hashlib.sha1(old_memory["content"].encode("utf-8")).hexdigest()[:32]
+                await self.vector.delete(old_hash)
+
+        return old_memory is not None
+
     async def extract_and_store(
         self,
         session_id: str,
         messages: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        """Extract long-term memories from a conversation exchange and store them.
+        """Extract and apply long-term memory operations from a conversation exchange.
 
         Uses the active LLM provider (when available) to identify durable facts,
-        preferences, and instructions worth remembering.
+        preferences, and instructions worth remembering (add), updating (edit),
+        or removing (delete).
 
         Args:
             session_id: The session the messages came from.
             messages: Recent conversation messages (user/assistant turns).
 
         Returns:
-            The list of extracted and stored memories.
+            The list of applied memory operations (add, edit, delete).
         """
-        if not self.long_term:
+        lt = self.long_term
+        if lt is None:
             return []
 
         provider, model = self._get_extraction_target()
@@ -373,15 +486,11 @@ class MemoryManager:
             MemoryExtractor,
         )
 
-        existing = [
-            m.get("content", "")
-            for m in await self.long_term.list_all()
-            if m.get("content")
-        ]
+        existing = await lt.list_all()
 
         extractor = MemoryExtractor(provider, model=model)
         try:
-            memories = await extractor.extract(messages, existing_memories=existing)
+            operations = await extractor.extract(messages, existing_memories=existing)
         except MemoryExtractionError as e:
             # Surface rather than swallow: a wrong model id here makes long-term
             # memory silently never store anything.
@@ -396,28 +505,38 @@ class MemoryManager:
 
         self._extraction_error = None
 
-        for memory in memories:
-            key = memory.get("key") or memory.get("content", "")[:80]
-            content = memory.get("content", "")
-            category = memory.get("category", "fact")
-            await self.long_term.store(key, {
-                "content": content,
-                "category": category,
-                "source": session_id,
-            })
-            if self.vector:
-                await self.store_vector(
-                    content,
-                    {
-                        "category": category,
-                        "type": "long_term",
-                        "source": session_id,
-                    },
-                )
+        applied: list[dict[str, Any]] = []
+        counts = {"add": 0, "edit": 0, "delete": 0}
 
-        if memories:
-            logger.info(f"Stored {len(memories)} long-term memories from session {session_id}.")
-        return memories
+        for op in operations:
+            action = op.get("action", "add")
+            key = op.get("key")
+            content = op.get("content", "")
+            category = op.get("category", "fact")
+
+            if action == "delete":
+                if key:
+                    await self.delete_memory(key)
+                    applied.append(op)
+                    counts["delete"] += 1
+            elif action == "edit":
+                if key and content:
+                    await self.edit_memory(key, content, category=category, session_id=session_id)
+                    applied.append(op)
+                    counts["edit"] += 1
+            else:  # add
+                if content:
+                    saved_key = key or content[:80]
+                    await self.save_memory(saved_key, content, category=category, session_id=session_id)
+                    applied.append(op)
+                    counts["add"] += 1
+
+        if applied:
+            logger.info(
+                f"Long-term memory updated from session {session_id}: "
+                f"{counts['add']} added, {counts['edit']} edited, {counts['delete']} deleted."
+            )
+        return applied
 
     async def flush(self) -> None:
         """Flush all memory backends to persistent storage."""
